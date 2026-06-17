@@ -8,6 +8,8 @@ import AdminDashboard from './pages/admin/Dashboard'
 import Users from './pages/admin/Users'
 import Routines from './pages/admin/Routines'
 import AppDashboard from './pages/app/Dashboard'
+import Tareas       from './pages/app/Tareas'
+import TaskDetail   from './pages/app/TaskDetail'
 
 function RootRedirect() {
   const { user, role, loading } = useAuth()
@@ -59,9 +61,10 @@ export default function App() {
             }
           >
             <Route index element={<AppDashboard />} />
-            <Route path="inspeccion" element={<div className="p-4 text-gray-400">Inspección — próximamente</div>} />
-            <Route path="equipos" element={<div className="p-4 text-gray-400">Equipos — próximamente</div>} />
-            <Route path="perfil" element={<div className="p-4 text-gray-400">Perfil — próximamente</div>} />
+            <Route path="tareas"    element={<Tareas />} />
+            <Route path="tareas/:id" element={<TaskDetail />} />
+            <Route path="equipos"   element={<div className="p-4 text-gray-400">Equipos — próximamente</div>} />
+            <Route path="perfil"    element={<div className="p-4 text-gray-400">Perfil — próximamente</div>} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

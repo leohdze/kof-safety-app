@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { FieldProvider } from '../../context/FieldContext'
 
 const navItems = [
   {
@@ -14,8 +15,8 @@ const navItems = [
     ),
   },
   {
-    to: '/app/inspeccion',
-    label: 'Inspección',
+    to: '/app/tareas',
+    label: 'Tareas',
     icon: (
       <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
         <path strokeLinecap="round" strokeLinejoin="round"
@@ -50,51 +51,88 @@ export default function AppLayout() {
   const navigate = useNavigate()
 
   async function handleSignOut() {
-    await signOut()
-    navigate('/login', { replace: true })
+    try {
+      await signOut()
+    } finally {
+      navigate('/login', { replace: true })
+    }
   }
 
   return (
-    <div className="min-h-screen bg-kof-bg flex flex-col max-w-md mx-auto relative">
-      {/* Top bar */}
-      <header className="bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-kof-red rounded-xl flex items-center justify-center">
-            <svg className="w-4.5 h-4.5 text-white w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round"
-                d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6
-                   1.25 8.25 0 005.5 17.5a11.956 11.956 0 006.5 2c2.56 0 4.93-.8
-                   6.864-2.152M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25" />
-            </svg>
+    <FieldProvider>
+    <div className="min-h-screen-safe bg-kof-bg flex flex-col max-w-md mx-auto">
+
+      {/*
+       * Header fijo en la parte superior.
+       * padding-top = safe-area-inset-top para el notch/Dynamic Island.
+       * La barra de contenido visible siempre mide h-14 (56px).
+       */}
+      <header
+        className="bg-white border-b border-gray-100 px-4 flex items-center justify-between sticky top-0 z-10 shadow-sm flex-shrink-0"
+        style={{
+          paddingTop: 'env(safe-area-inset-top, 0px)',
+          minHeight: 'calc(3.5rem + env(safe-area-inset-top, 0px))',
+        }}
+      >
+        <div className="flex items-center justify-between w-full h-14">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-kof-red rounded-xl flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6
+                     1.25 8.25 0 005.5 17.5a11.956 11.956 0 006.5 2c2.56 0 4.93-.8
+                     6.864-2.152M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25" />
+              </svg>
+            </div>
+            <span className="text-sm font-bold text-gray-900">KOF Safety</span>
           </div>
-          <span className="text-sm font-bold text-gray-900">KOF Safety</span>
+          <button
+            onClick={handleSignOut}
+            className="text-gray-400 hover:text-kof-red transition-colors p-2 rounded-xl hover:bg-red-50"
+            aria-label="Cerrar sesión"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+          </button>
         </div>
-        <button
-          onClick={handleSignOut}
-          className="text-gray-400 hover:text-kof-red transition-colors p-1"
-          aria-label="Cerrar sesión"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-            <path strokeLinecap="round" strokeLinejoin="round"
-              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-        </button>
       </header>
 
-      {/* Page content */}
-      <main className="flex-1 overflow-auto pb-20">
-        <Outlet />
+      {/*
+       * Área de contenido scrolleable.
+       * pb-nav-safe = altura del bottom nav (4.5rem) + safe-area-inset-bottom
+       * para que el contenido nunca quede debajo de la barra de navegación
+       * ni del indicador home de iPhone.
+       */}
+      <main
+        className="flex-1 overflow-auto"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
+        <div className="pb-nav-safe">
+          <Outlet />
+        </div>
       </main>
 
-      {/* Bottom nav */}
-      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-gray-100 flex justify-around items-center px-2 py-2 z-10 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+      {/*
+       * Bottom nav fijo.
+       * padding-bottom = safe-area-inset-bottom para quedar por encima
+       * del indicador home en iPhones sin botón físico.
+       */}
+      <nav
+        className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-gray-100 flex justify-around items-center px-2 z-10 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]"
+        style={{
+          paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.5rem)',
+          paddingTop: '0.5rem',
+        }}
+      >
         {navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.end}
             className={({ isActive }) =>
-              `flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all duration-150 ${
+              `flex flex-col items-center gap-1 px-4 py-1 rounded-xl transition-all duration-150 ${
                 isActive ? 'text-kof-red' : 'text-gray-400'
               }`
             }
@@ -105,5 +143,6 @@ export default function AppLayout() {
         ))}
       </nav>
     </div>
+    </FieldProvider>
   )
 }

@@ -37,8 +37,14 @@ export function AuthProvider({ children }) {
   }
 
   async function signOut() {
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
+    try {
+      await supabase.auth.signOut()
+    } catch (_) {
+      // Si Supabase falla (red, token ya expirado), limpiamos el estado
+      // cliente de todas formas para no dejar al usuario atascado.
+    }
+    setUser(null)
+    setRole(null)
   }
 
   return (
