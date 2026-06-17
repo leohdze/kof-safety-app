@@ -5,6 +5,8 @@ import {
   TIPO_ASIGNACION, getStatusTarea, STATUS_CFG, countdown, initials,
 } from '../../data/mockTareas'
 import { getTasks, createTask, updateTask } from '../../services/taskService'
+import { createAssignments } from '../../services/assignmentService'
+import { getUsers } from '../../services/userService'
 
 // ─── Sub-componentes de formulario ────────────────────────────────────────────
 
@@ -72,18 +74,65 @@ function CheckboxChips({ items, value, onChange }) {
   )
 }
 
+// Chips para selección de usuarios reales (muestra nombre, almacena UUID)
+function UserChips({ users, value, onChange, loading }) {
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-3">
+        <div className="w-4 h-4 border-2 border-kof-red border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs text-gray-400">Cargando usuarios...</span>
+      </div>
+    )
+  }
+  if (!users.length) {
+    return <p className="text-xs text-gray-400 py-2">Sin usuarios de campo disponibles.</p>
+  }
+  return (
+    <div className="flex flex-wrap gap-2 max-h-44 overflow-y-auto pr-1">
+      {users.map(u => {
+        const sel = value.includes(u.id)
+        return (
+          <button key={u.id} type="button"
+            onClick={() => onChange(sel ? value.filter(v => v !== u.id) : [...value, u.id])}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+              sel
+                ? 'bg-kof-red text-white border-kof-red'
+                : 'bg-white text-gray-500 border-gray-200 hover:border-kof-red hover:text-kof-red'
+            }`}>
+            {u.nombre}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 const EMPTY_FORM = {
   nombre: '', descripcion: '', periodicidad: 'Mensual',
   clasificacion: 'Operativa', prioridad: 'Medio',
   requiereVobo: false, evidencias: [],
+  fechaLimite: '',
   asignacion: { tipo: 'region', valores: [] },
 }
 
 function TareaModal({ tarea, onClose, onSave }) {
   const [form, setForm] = useState(tarea
-    ? { ...tarea, asignacion: { ...tarea.asignacion } }
+    ? { ...tarea, fechaLimite: tarea.fechaLimite ? new Date(tarea.fechaLimite).toISOString().slice(0, 16) : '', asignacion: { ...tarea.asignacion } }
     : { ...EMPTY_FORM, asignacion: { ...EMPTY_FORM.asignacion } }
   )
+  const [fieldUsers, setFieldUsers]     = useState([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
+
+  // Cargar TSDs cuando se selecciona el tipo 'usuario'
+  useEffect(() => {
+    if (form.asignacion.tipo !== 'usuario') return
+    if (fieldUsers.length) return
+    setLoadingUsers(true)
+    getUsers({ rol: 'field', activo: true })
+      .then(users => setFieldUsers(users.filter(u => u.activo !== false)))
+      .catch(console.warn)
+      .finally(() => setLoadingUsers(false))
+  }, [form.asignacion.tipo, fieldUsers.length])
 
   function handleTipo(tipo) {
     setForm(f => ({ ...f, asignacion: { tipo, valores: [] } }))
@@ -151,6 +200,17 @@ function TareaModal({ tarea, onClose, onSave }) {
             </select>
           </div>
 
+          {/* Fecha límite */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1.5">FECHA LÍMITE</label>
+            <input
+              type="datetime-local"
+              value={form.fechaLimite}
+              onChange={e => setForm(f => ({ ...f, fechaLimite: e.target.value }))}
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-kof-red/30 focus:border-kof-red transition-all"
+            />
+          </div>
+
           {/* Asignación */}
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1.5">ASIGNAR A</label>
@@ -166,11 +226,27 @@ function TareaModal({ tarea, onClose, onSave }) {
                 </button>
               ))}
             </div>
-            <CheckboxChips
-              items={TIPO_ASIGNACION[form.asignacion.tipo].items}
-              value={form.asignacion.valores}
-              onChange={vals => setForm(f => ({ ...f, asignacion: { ...f.asignacion, valores: vals } }))}
-            />
+
+            {form.asignacion.tipo === 'usuario' ? (
+              <UserChips
+                users={fieldUsers}
+                value={form.asignacion.valores}
+                onChange={vals => setForm(f => ({ ...f, asignacion: { ...f.asignacion, valores: vals } }))}
+                loading={loadingUsers}
+              />
+            ) : (
+              <CheckboxChips
+                items={TIPO_ASIGNACION[form.asignacion.tipo].items}
+                value={form.asignacion.valores}
+                onChange={vals => setForm(f => ({ ...f, asignacion: { ...f.asignacion, valores: vals } }))}
+              />
+            )}
+
+            {form.asignacion.valores.length > 0 && (
+              <p className="text-[10px] text-gray-400 mt-2">
+                {form.asignacion.valores.length} seleccionado{form.asignacion.valores.length !== 1 ? 's' : ''}
+              </p>
+            )}
           </div>
 
           {/* Evidencias */}
@@ -298,11 +374,19 @@ export default function Tareas() {
   const [filtPeriodicidad, setFiltPeriodicidad] = useState('')
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState(null) // null | 'new' | { tarea }
+  const [toast, setToast] = useState(null) // { type: 'success'|'error', msg: string }
 
   useEffect(() => {
     setLoading(true)
     getTasks().then(setTareas).finally(() => setLoading(false))
   }, [])
+
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 5000)
+    return () => clearTimeout(t)
+  }, [toast])
 
   const filtered = useMemo(() => {
     return tareas.filter(t => {
@@ -323,21 +407,50 @@ export default function Tareas() {
   }, [tareas, clasifTab, statusTab, filtPrioridad, filtPeriodicidad, search])
 
   async function handleSave(form) {
-    try {
-      if (modal?.tarea) {
+    if (modal?.tarea) {
+      // Editar tarea existente
+      try {
         await updateTask(modal.tarea.id, form)
         setTareas(ts => ts.map(t => t.id === modal.tarea.id ? { ...t, ...form } : t))
-      } else {
-        const newTarea = await createTask(form)
-        setTareas(ts => [...ts, newTarea])
-      }
-    } catch (err) {
-      console.warn('[Tareas] save error, aplicando solo localmente:', err.message)
-      if (modal?.tarea) {
+      } catch (err) {
+        console.warn('[Tareas] updateTask error:', err.message)
         setTareas(ts => ts.map(t => t.id === modal.tarea.id ? { ...t, ...form } : t))
-      } else {
-        setTareas(ts => [...ts, { ...form, id: Date.now(), tsds: [], activa: true }])
       }
+      return
+    }
+
+    // Crear nueva tarea
+    let newTarea
+    try {
+      newTarea = await createTask(form)
+      setTareas(ts => [...ts, newTarea])
+    } catch (err) {
+      console.warn('[Tareas] createTask error, aplicando localmente:', err.message)
+      newTarea = { ...form, id: Date.now(), tsds: [], activa: true }
+      setTareas(ts => [...ts, newTarea])
+      setToast({ type: 'error', msg: 'Error al guardar la tarea en Supabase.' })
+      return
+    }
+
+    // Crear asignaciones automáticamente
+    const { tipo, valores } = form.asignacion
+    if (!valores.length) {
+      setToast({ type: 'success', msg: 'Tarea creada. Sin TSDs seleccionados para asignar.' })
+      return
+    }
+
+    try {
+      const count = await createAssignments(newTarea.id, form.fechaLimite || null, { tipo, valores })
+      if (count > 0) {
+        setToast({ type: 'success', msg: `Tarea creada y asignada a ${count} TSD${count !== 1 ? 's' : ''}.` })
+        // Refrescar la tarea para mostrar los TSDs asignados
+        getTasks().then(setTareas).catch(console.warn)
+      } else {
+        setToast({ type: 'error', msg: 'Tarea creada, pero no se encontraron TSDs activos para los criterios seleccionados.' })
+      }
+    } catch (assignErr) {
+      console.warn('[Tareas] createAssignments error:', assignErr.message)
+      setToast({ type: 'error', msg: `Tarea creada pero error al asignar: ${assignErr.message}` })
     }
   }
 
@@ -454,6 +567,31 @@ export default function Tareas() {
           onClose={() => setModal(null)}
           onSave={handleSave}
         />
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5
+          px-5 py-3 rounded-2xl shadow-lg text-sm font-semibold text-white
+          animate-[fadeInUp_0.2s_ease-out] whitespace-nowrap ${
+            toast.type === 'success' ? 'bg-emerald-500' : 'bg-kof-red'
+          }`}>
+          {toast.type === 'success' ? (
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+          )}
+          {toast.msg}
+          <button onClick={() => setToast(null)} className="ml-1 opacity-70 hover:opacity-100">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       )}
     </div>
   )

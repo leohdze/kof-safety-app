@@ -89,3 +89,72 @@ export async function getAssignmentStatus(assignmentId) {
   if (error) throw error
   return data
 }
+
+// ─── Creación masiva de asignaciones al publicar una tarea ────────────────────
+// assignmentConfig: { tipo: 'region'|'uo'|'usuario', valores: string[]|uuid[] }
+// Devuelve el número de asignaciones creadas.
+
+export async function createAssignments(taskId, dueDate, { tipo, valores }) {
+  if (!taskId || !valores?.length) return 0
+
+  // 1. Resolver perfiles de TSDs según el tipo de asignación
+  let profiles = []
+
+  if (tipo === 'region') {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('id, region, uo')
+      .in('region', valores)
+      .eq('role', 'field')
+      .eq('is_active', true)
+    if (error) throw new Error(`Consulta de región: ${error.message}`)
+    profiles = data ?? []
+  } else if (tipo === 'uo') {
+    // user_profiles.uo es text[] — buscamos overlap con los valores seleccionados
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('id, region, uo')
+      .overlaps('uo', valores)
+      .eq('role', 'field')
+      .eq('is_active', true)
+    if (error) throw new Error(`Consulta de UO: ${error.message}`)
+    profiles = data ?? []
+  } else if (tipo === 'usuario') {
+    // valores son UUIDs de los TSDs seleccionados
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('id, region, uo')
+      .in('id', valores)
+      .eq('is_active', true)
+    if (error) throw new Error(`Consulta de usuario: ${error.message}`)
+    profiles = data ?? []
+  }
+
+  if (!profiles.length) return 0
+
+  // 2. Deduplicar por user_id (un TSD puede aparecer en varios filtros)
+  const seen = new Set()
+  const unique = profiles.filter(p => {
+    if (seen.has(p.id)) return false
+    seen.add(p.id)
+    return true
+  })
+
+  // 3. Insertar asignaciones
+  const rows = unique.map(p => ({
+    task_id:  taskId,
+    user_id:  p.id,
+    region:   p.region ?? null,
+    uo:       Array.isArray(p.uo) ? (p.uo[0] ?? null) : (p.uo ?? null),
+    due_date: dueDate ? new Date(dueDate).toISOString() : null,
+    status:   'pending',
+  }))
+
+  const { data, error } = await supabase
+    .from('task_assignments')
+    .insert(rows)
+    .select('id')
+
+  if (error) throw new Error(`Insertar asignaciones: ${error.message}`)
+  return (data ?? []).length
+}
