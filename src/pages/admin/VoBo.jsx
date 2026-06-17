@@ -52,7 +52,15 @@ const REGIONES = [
   'Puebla Foránea', 'Puebla', 'Montaña', 'Acapulco', 'Cuernavaca',
 ]
 
-function EvidPill({ tipo, nombre }) {
+function EvidPill({ tipo, nombre, url }) {
+  if (tipo === 'image' && url) {
+    return (
+      <a href={url} target="_blank" rel="noreferrer"
+        className="w-12 h-12 rounded-xl overflow-hidden border border-gray-100 bg-gray-50 flex-shrink-0 block">
+        <img src={url} alt={nombre} className="w-full h-full object-cover" />
+      </a>
+    )
+  }
   const s = EV_ICON_STYLE[tipo] ?? { bg: 'bg-gray-100 text-gray-500', label: 'FILE' }
   return (
     <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1">
@@ -293,7 +301,7 @@ export default function VoBo() {
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {item.evidencias.map((e, i) => (
-                      <EvidPill key={e.id ?? i} tipo={e.tipo} nombre={e.nombre} />
+                      <EvidPill key={e.id ?? i} tipo={e.tipo} nombre={e.nombre} url={e.url} />
                     ))}
                   </div>
                 </div>

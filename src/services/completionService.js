@@ -119,7 +119,7 @@ export async function getCompletion(taskId, userId) {
   }
 }
 
-export async function submitCompletion({ assignmentId, taskId, userId, isOnTime, comments, evidenceIds, requiereVobo }) {
+export async function submitCompletion({ assignmentId, taskId, userId, isOnTime, comments, evidences, requiereVobo }) {
   // 1. Crear el registro de completion
   const { data: completion, error: cErr } = await supabase
     .from('task_completions')
@@ -136,12 +136,19 @@ export async function submitCompletion({ assignmentId, taskId, userId, isOnTime,
 
   if (cErr) throw cErr
 
-  // 2. Vincular evidencias subidas al completion
-  if (evidenceIds?.length) {
-    await supabase
-      .from('task_evidence')
-      .update({ completion_id: completion.id })
-      .in('id', evidenceIds)
+  // 2. Insertar evidencias con completion_id conocido
+  if (evidences?.length) {
+    await supabase.from('task_evidence').insert(
+      evidences.map(e => ({
+        completion_id: completion.id,
+        task_id:       String(taskId),
+        user_id:       userId,
+        file_url:      e.url,
+        file_name:     e.nombre,
+        file_type:     e.ext,
+        file_size:     e.size ?? null,
+      }))
+    )
   }
 
   // 3. Marcar el assignment como completado

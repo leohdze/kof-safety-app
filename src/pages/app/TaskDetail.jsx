@@ -171,7 +171,7 @@ export default function TaskDetail() {
   const level  = task ? getUrgencyLevel(task) : null
   const isCompleted = status === 'completada'
 
-  // { [tempId]: { tempId, nombre, size, isImage, progress, status, preview, url, path, evidenceId, error } }
+  // { [tempId]: { tempId, nombre, size, isImage, progress, status, preview, url, path, error } }
   const [uploadsMap,   setUploadsMap]   = useState({})
   const [comentario,   setComentario]   = useState('')
   const [completing,   setCompleting]   = useState(false)
@@ -179,6 +179,7 @@ export default function TaskDetail() {
   const [showSuccess,  setShowSuccess]  = useState(false)
   const [dbEvidencias, setDbEvidencias] = useState(null)  // null=not loaded, []+=loaded
   const [loadingEvid,  setLoadingEvid]  = useState(false)
+  const [completionId, setCompletionId] = useState(null)
 
   const cameraRef  = useRef(null)
   const galleryRef = useRef(null)
@@ -192,21 +193,35 @@ export default function TaskDetail() {
     return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [done, navigate])
 
-  // Load evidence from Supabase for completed tasks
+  // Step 1: resolve completionId for completed tasks (query task_completions by assignment)
   useEffect(() => {
-    if (!isCompleted || !user?.id || !task?.id) return
+    if (!isCompleted || !task?.assignmentId || !user?.id || completionId) return
+    supabase
+      .from('task_completions')
+      .select('id')
+      .eq('assignment_id', task.assignmentId)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => { if (data?.id) setCompletionId(data.id) })
+      .catch(console.warn)
+  }, [isCompleted, task?.assignmentId, user?.id, completionId])
+
+  // Step 2: load evidence once completionId is known
+  useEffect(() => {
+    if (!completionId) return
     setLoadingEvid(true)
     supabase
       .from('task_evidence')
       .select('*')
-      .eq('task_id', String(task.id))
-      .eq('user_id', user.id)
+      .eq('completion_id', completionId)
       .order('uploaded_at', { ascending: true })
       .then(({ data, error }) => {
         setDbEvidencias(error ? null : (data ?? []))
         setLoadingEvid(false)
       })
-  }, [isCompleted, task?.id, user?.id])
+  }, [completionId])
 
   // ── Upload helpers ──────────────────────────────────────────────────────────
 
@@ -235,26 +250,9 @@ export default function TaskDetail() {
 
       const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(data.path)
 
-      // Save record in DB
-      const { data: dbRow, error: dbErr } = await supabase
-        .from('task_evidence')
-        .insert({
-          task_id: String(task.id),
-          user_id: user.id,
-          file_url: publicUrl,
-          file_name: file.name,
-          file_type: ext,
-          file_size: file.size,
-        })
-        .select('id')
-        .single()
-
-      if (dbErr) console.warn('task_evidence insert error:', dbErr.message)
-
       setUpload(tempId, {
         progress: 100, status: 'done',
         url: publicUrl, path: data.path,
-        evidenceId: dbRow?.id ?? null,
       })
     } catch (err) {
       setUpload(tempId, {
@@ -275,7 +273,7 @@ export default function TaskDetail() {
         setUploadsMap(prev => ({ ...prev, [tempId]: {
           tempId, nombre: file.name, size: file.size, isImage: false,
           progress: 0, status: 'error', url: null, path: null, preview: null,
-          evidenceId: null, error: `Tipo no permitido (.${ext}). Acepta: ${ACCEPTED_EXT.join(', ')}`,
+          error: `Tipo no permitido (.${ext}). Acepta: ${ACCEPTED_EXT.join(', ')}`,
         }}))
         return
       }
@@ -285,7 +283,7 @@ export default function TaskDetail() {
         setUploadsMap(prev => ({ ...prev, [tempId]: {
           tempId, nombre: file.name, size: file.size, isImage: false,
           progress: 0, status: 'error', url: null, path: null, preview: null,
-          evidenceId: null, error: `El archivo supera el límite de 50 MB (${formatSize(file.size)})`,
+          error: `El archivo supera el límite de 50 MB (${formatSize(file.size)})`,
         }}))
         return
       }
@@ -296,7 +294,7 @@ export default function TaskDetail() {
       setUploadsMap(prev => ({ ...prev, [tempId]: {
         tempId, nombre: file.name, size: file.size, isImage,
         progress: 0, status: 'uploading', url: null, path: null,
-        preview: null, evidenceId: null, error: null,
+        preview: null, error: null,
       }}))
 
       // Image: FileReader para preview inmediato mientras sube
@@ -317,9 +315,6 @@ export default function TaskDetail() {
 
     if (item.path) {
       supabase.storage.from(BUCKET).remove([item.path]).catch(console.warn)
-    }
-    if (item.evidenceId) {
-      supabase.from('task_evidence').delete().eq('id', item.evidenceId).catch(console.warn)
     }
 
     setUploadsMap(prev => {
@@ -346,19 +341,25 @@ export default function TaskDetail() {
 
     // Si la tarea vino de Supabase, registrar la entrega en DB
     if (task.assignmentId && task.taskId && user?.id) {
-      const evidenceIds = Object.values(uploadsMap)
-        .filter(u => u.status === 'done' && u.evidenceId)
-        .map(u => u.evidenceId)
+      const evidences = Object.values(uploadsMap)
+        .filter(u => u.status === 'done' && u.url)
+        .map(u => ({
+          url:    u.url,
+          nombre: u.nombre,
+          ext:    fileExt(u.nombre),
+          size:   u.size ?? null,
+        }))
       try {
-        await submitCompletion({
+        const completion = await submitCompletion({
           assignmentId: task.assignmentId,
           taskId:       task.taskId,
           userId:       user.id,
           isOnTime:     task.fechaLimite > Date.now(),
           comments:     comentario || null,
-          evidenceIds,
+          evidences,
           requiereVobo: task.requiereVobo,
         })
+        if (completion?.id) setCompletionId(completion.id)
       } catch (err) {
         console.warn('[TaskDetail] submitCompletion error:', err.message)
       }
