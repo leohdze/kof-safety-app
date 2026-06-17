@@ -119,7 +119,7 @@ export async function getCompletion(taskId, userId) {
   }
 }
 
-export async function submitCompletion({ assignmentId, taskId, userId, isOnTime, comments, evidenceIds }) {
+export async function submitCompletion({ assignmentId, taskId, userId, isOnTime, comments, evidenceIds, requiereVobo }) {
   // 1. Crear el registro de completion
   const { data: completion, error: cErr } = await supabase
     .from('task_completions')
@@ -129,7 +129,7 @@ export async function submitCompletion({ assignmentId, taskId, userId, isOnTime,
       user_id:       userId,
       is_on_time:    isOnTime,
       comments:      comments ?? null,
-      vobo_status:   'pending', // se actualiza si no requiere VoBo
+      vobo_status:   requiereVobo ? 'pending' : 'not_required',
     })
     .select()
     .single()

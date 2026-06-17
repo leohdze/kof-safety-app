@@ -15,6 +15,7 @@ import AppDashboard   from './pages/app/Dashboard'
 import Tareas         from './pages/app/Tareas'
 import TaskDetail     from './pages/app/TaskDetail'
 import Historial      from './pages/app/Historial'
+import Perfil        from './pages/app/Perfil'
 
 function RootRedirect() {
   const { user, role, loading } = useAuth()
@@ -74,7 +75,7 @@ export default function App() {
             <Route path="tareas/:id" element={<TaskDetail />} />
             <Route path="historial"  element={<Historial />} />
             <Route path="equipos"    element={<div className="p-4 text-gray-400">Equipos — próximamente</div>} />
-            <Route path="perfil"     element={<div className="p-4 text-gray-400">Perfil — próximamente</div>} />
+            <Route path="perfil"     element={<Perfil />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

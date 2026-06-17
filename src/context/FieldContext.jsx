@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { useAuth } from './AuthContext'
+import { supabase } from '../lib/supabase'
 import { getMyAssignments } from '../services/assignmentService'
 
 // ─── Helpers exportados (usados en Home, Tareas y TaskDetail) ─────────────────
@@ -198,7 +199,9 @@ export function FieldProvider({ children }) {
   const [tasks, setTasks]       = useState(INITIAL_TASKS)
   const [loading, setLoading]   = useState(false)
   const [fromDB, setFromDB]     = useState(false)
+  const [profile, setProfile]   = useState(null)
 
+  // Cargar asignaciones activas
   useEffect(() => {
     if (!user?.id) return
     setLoading(true)
@@ -208,12 +211,25 @@ export function FieldProvider({ children }) {
           setTasks(dbTasks)
           setFromDB(true)
         }
-        // Si no hay tareas en DB, INITIAL_TASKS sigue activo como fallback
       })
       .catch(err => {
         console.warn('[FieldContext] Supabase unavailable, using mock tasks:', err.message)
       })
       .finally(() => setLoading(false))
+  }, [user?.id])
+
+  // Cargar perfil del TSD
+  useEffect(() => {
+    if (!user?.id) return
+    supabase
+      .from('user_profiles')
+      .select('id, full_name, region, uo, subrole, is_active')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => { if (data) setProfile(data) })
+      .catch(err => {
+        console.warn('[FieldContext] profile fetch error:', err.message)
+      })
   }, [user?.id])
 
   function completeTask(id, { evidencias, comentario }) {
@@ -225,7 +241,7 @@ export function FieldProvider({ children }) {
   }
 
   return (
-    <FieldContext.Provider value={{ tasks, completeTask, loading, fromDB }}>
+    <FieldContext.Provider value={{ tasks, completeTask, loading, fromDB, profile }}>
       {children}
     </FieldContext.Provider>
   )

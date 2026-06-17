@@ -357,6 +357,7 @@ export default function TaskDetail() {
           isOnTime:     task.fechaLimite > Date.now(),
           comments:     comentario || null,
           evidenceIds,
+          requiereVobo: task.requiereVobo,
         })
       } catch (err) {
         console.warn('[TaskDetail] submitCompletion error:', err.message)

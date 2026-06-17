@@ -81,12 +81,12 @@ const FILTERS = [
 ]
 
 export default function AppHome() {
-  const { user }   = useAuth()
-  const { tasks }  = useField()
-  const navigate   = useNavigate()
+  const { user }            = useAuth()
+  const { tasks, profile }  = useField()
+  const navigate            = useNavigate()
   const [filter, setFilter] = useState('hoy')
 
-  const nombre    = user?.user_metadata?.nombre || user?.email?.split('@')[0] || 'Usuario'
+  const nombre    = profile?.full_name || user?.user_metadata?.nombre || user?.email?.split('@')[0] || 'Usuario'
   const firstName = nombre.split(' ')[0]
 
   const sod = startOfToday()
