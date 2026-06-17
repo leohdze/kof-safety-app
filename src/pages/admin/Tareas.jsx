@@ -6,7 +6,7 @@ import {
 } from '../../data/mockTareas'
 import { getTasks, createTask, updateTask } from '../../services/taskService'
 import { createAssignments } from '../../services/assignmentService'
-import { getUsers } from '../../services/userService'
+import { getFieldUsers } from '../../services/userService'
 
 // ─── Sub-componentes de formulario ────────────────────────────────────────────
 
@@ -128,9 +128,9 @@ function TareaModal({ tarea, onClose, onSave }) {
     if (form.asignacion.tipo !== 'usuario') return
     if (fieldUsers.length) return
     setLoadingUsers(true)
-    getUsers({ rol: 'field', activo: true })
-      .then(users => setFieldUsers(users.filter(u => u.activo !== false)))
-      .catch(console.warn)
+    getFieldUsers()
+      .then(setFieldUsers)
+      .catch(err => console.warn('[TareaModal] no se pudieron cargar TSDs:', err.message))
       .finally(() => setLoadingUsers(false))
   }, [form.asignacion.tipo, fieldUsers.length])
 

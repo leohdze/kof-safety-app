@@ -84,6 +84,25 @@ export async function createUserProfile(formData) {
   return normalizeUser(data)
 }
 
+// Sin fallback mock — devuelve error si Supabase falla.
+// Usar en selectores que necesitan UUIDs reales (ej: TareaModal tipo 'usuario').
+export async function getFieldUsers() {
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('id, full_name, region, uo')
+    .eq('role', 'field')
+    .neq('is_active', false)
+    .order('full_name')
+
+  if (error) throw error
+  return (data ?? []).map(p => ({
+    id:     p.id,
+    nombre: p.full_name,
+    region: p.region ?? '',
+    uo:     Array.isArray(p.uo) ? p.uo.join(', ') : (p.uo ?? ''),
+  }))
+}
+
 export async function updateUserProfile(id, formData) {
   const { data, error } = await supabase
     .from('user_profiles')

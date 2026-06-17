@@ -106,7 +106,7 @@ export async function createAssignments(taskId, dueDate, { tipo, valores }) {
       .select('id, region, uo')
       .in('region', valores)
       .eq('role', 'field')
-      .eq('is_active', true)
+      .neq('is_active', false)
     if (error) throw new Error(`Consulta de región: ${error.message}`)
     profiles = data ?? []
   } else if (tipo === 'uo') {
@@ -116,7 +116,7 @@ export async function createAssignments(taskId, dueDate, { tipo, valores }) {
       .select('id, region, uo')
       .overlaps('uo', valores)
       .eq('role', 'field')
-      .eq('is_active', true)
+      .neq('is_active', false)
     if (error) throw new Error(`Consulta de UO: ${error.message}`)
     profiles = data ?? []
   } else if (tipo === 'usuario') {
@@ -125,7 +125,7 @@ export async function createAssignments(taskId, dueDate, { tipo, valores }) {
       .from('user_profiles')
       .select('id, region, uo')
       .in('id', valores)
-      .eq('is_active', true)
+      .neq('is_active', false)
     if (error) throw new Error(`Consulta de usuario: ${error.message}`)
     profiles = data ?? []
   }
