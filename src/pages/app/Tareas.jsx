@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useRef, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   useField, getStatus, getUrgencyLevel, urgencyLabel,
   URGENCY_STYLE, formatDeadline,
@@ -65,7 +65,24 @@ function SectionHeader({ label, count, color }) {
 export default function Tareas() {
   const { tasks }  = useField()
   const navigate   = useNavigate()
+  const location   = useLocation()
   const [search, setSearch] = useState('')
+
+  const vencidasRef    = useRef(null)
+  const pendientesRef  = useRef(null)
+  const completadasRef = useRef(null)
+
+  // Scroll a la sección indicada por el chip del dashboard
+  useEffect(() => {
+    const filtro = location.state?.filtro
+    if (!filtro) return
+    const refMap = { vencidas: vencidasRef, pendientes: pendientesRef, completadas: completadasRef }
+    const ref = refMap[filtro]
+    const timer = setTimeout(() => {
+      ref?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 120)
+    return () => clearTimeout(timer)
+  }, [location.state?.filtro])
 
   const q = search.toLowerCase()
   const visible = tasks.filter(t => t.nombre.toLowerCase().includes(q))
@@ -111,7 +128,7 @@ export default function Tareas() {
 
         {/* Vencidas */}
         {vencidas.length > 0 && (
-          <div>
+          <div ref={vencidasRef}>
             <SectionHeader label="Vencidas" count={vencidas.length} color="bg-red-50 text-kof-red" />
             {vencidas.map(t => <TaskRow key={t.id} task={t} onClick={() => go(t.id)} />)}
           </div>
@@ -119,7 +136,7 @@ export default function Tareas() {
 
         {/* Pendientes */}
         {pendientes.length > 0 && (
-          <div className={vencidas.length > 0 ? 'border-t border-gray-100' : ''}>
+          <div ref={pendientesRef} className={vencidas.length > 0 ? 'border-t border-gray-100' : ''}>
             <SectionHeader label="Pendientes" count={pendientes.length} color="bg-blue-50 text-blue-700" />
             {pendientes.map(t => <TaskRow key={t.id} task={t} onClick={() => go(t.id)} />)}
           </div>
@@ -127,7 +144,7 @@ export default function Tareas() {
 
         {/* Completadas */}
         {completadas.length > 0 && (
-          <div className={(vencidas.length > 0 || pendientes.length > 0) ? 'border-t border-gray-100' : ''}>
+          <div ref={completadasRef} className={(vencidas.length > 0 || pendientes.length > 0) ? 'border-t border-gray-100' : ''}>
             <SectionHeader label="Completadas" count={completadas.length} color="bg-emerald-50 text-emerald-700" />
             {completadas.map(t => <TaskRow key={t.id} task={t} onClick={() => go(t.id)} />)}
           </div>

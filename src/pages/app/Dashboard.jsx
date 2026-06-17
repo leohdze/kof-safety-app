@@ -37,12 +37,13 @@ const PERIODICIDAD_STYLE = {
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 
-function StatChip({ label, value, color }) {
+function StatChip({ label, value, color, onClick }) {
   return (
-    <div className={`flex-1 flex flex-col items-center py-3 rounded-2xl ${color}`}>
+    <button onClick={onClick}
+      className={`flex-1 flex flex-col items-center py-3 rounded-2xl active:scale-95 transition-transform cursor-pointer ${color}`}>
       <span className="text-2xl font-bold leading-none">{value}</span>
       <span className="text-[10px] font-semibold mt-1 opacity-75 text-center leading-tight">{label}</span>
-    </div>
+    </button>
   )
 }
 
@@ -106,10 +107,13 @@ export default function AppHome() {
 
       {/* Estadísticas */}
       <div className="flex gap-2.5">
-        <StatChip label="Pendientes hoy" value={pendientesHoy} color="bg-blue-50 text-blue-700" />
-        <StatChip label="Completadas"    value={completadasHoy} color="bg-emerald-50 text-emerald-700" />
-        <StatChip label="Vencidas"       value={vencidas}
-          color={vencidas > 0 ? 'bg-red-50 text-kof-red' : 'bg-gray-50 text-gray-400'} />
+        <StatChip label="Pendientes hoy" value={pendientesHoy} color="bg-blue-50 text-blue-700"
+          onClick={() => navigate('/app/tareas', { state: { filtro: 'pendientes' } })} />
+        <StatChip label="Completadas" value={completadasHoy} color="bg-emerald-50 text-emerald-700"
+          onClick={() => navigate('/app/tareas', { state: { filtro: 'completadas' } })} />
+        <StatChip label="Vencidas" value={vencidas}
+          color={vencidas > 0 ? 'bg-red-50 text-kof-red' : 'bg-gray-50 text-gray-400'}
+          onClick={() => navigate('/app/tareas', { state: { filtro: 'vencidas' } })} />
       </div>
 
       {/* Filtros */}
