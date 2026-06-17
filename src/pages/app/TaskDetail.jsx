@@ -171,11 +171,13 @@ export default function TaskDetail() {
   const isCompleted = status === 'completada'
 
   // { [tempId]: { tempId, nombre, size, isImage, progress, status, preview, url, path, evidenceId, error } }
-  const [uploadsMap,  setUploadsMap]  = useState({})
-  const [comentario,  setComentario]  = useState('')
-  const [completing,  setCompleting]  = useState(false)
-  const [done,        setDone]        = useState(false)
-  const [showSuccess, setShowSuccess] = useState(false)
+  const [uploadsMap,   setUploadsMap]   = useState({})
+  const [comentario,   setComentario]   = useState('')
+  const [completing,   setCompleting]   = useState(false)
+  const [done,         setDone]         = useState(false)
+  const [showSuccess,  setShowSuccess]  = useState(false)
+  const [dbEvidencias, setDbEvidencias] = useState(null)  // null=not loaded, []+=loaded
+  const [loadingEvid,  setLoadingEvid]  = useState(false)
 
   const cameraRef  = useRef(null)
   const galleryRef = useRef(null)
@@ -188,6 +190,22 @@ export default function TaskDetail() {
     const t2 = setTimeout(() => navigate('/app/tareas', { replace: true }), 2000)
     return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [done, navigate])
+
+  // Load evidence from Supabase for completed tasks
+  useEffect(() => {
+    if (!isCompleted || !user?.id || !task?.id) return
+    setLoadingEvid(true)
+    supabase
+      .from('task_evidence')
+      .select('*')
+      .eq('task_id', String(task.id))
+      .eq('user_id', user.id)
+      .order('uploaded_at', { ascending: true })
+      .then(({ data, error }) => {
+        setDbEvidencias(error ? null : (data ?? []))
+        setLoadingEvid(false)
+      })
+  }, [isCompleted, task?.id, user?.id])
 
   // ── Upload helpers ──────────────────────────────────────────────────────────
 
@@ -344,13 +362,29 @@ export default function TaskDetail() {
 
   // ── Derived state ─────────────────────────────────────────────────────────────
 
-  const uploadsArr  = Object.values(uploadsMap)
+  const uploadsArr   = Object.values(uploadsMap)
   const hasUploading = uploadsArr.some(u => u.status === 'uploading')
-  const doneImages  = uploadsArr.filter(u => u.status === 'done' && u.isImage)
-  const otherItems  = uploadsArr.filter(u => !(u.status === 'done' && u.isImage))
+  const doneImages   = uploadsArr.filter(u => u.status === 'done' && u.isImage)
+  const otherItems   = uploadsArr.filter(u => !(u.status === 'done' && u.isImage))
 
-  // Evidence to show for already-completed tasks (stored in FieldContext after completing)
-  const completedEvidence = task.evidencias ?? []
+  // Normalize evidence from DB shape { file_url, file_name, file_type } or
+  // in-memory shape { preview, nombre, tipo } to a unified display shape.
+  function normalizeEv(ev) {
+    if (ev.file_name !== undefined) {
+      const isImg = isImageExt(ev.file_type)
+      return { id: ev.id, nombre: ev.file_name, url: ev.file_url,
+               preview: isImg ? ev.file_url : null, isImage: isImg,
+               tipo: ev.file_type, size: ev.file_size }
+    }
+    return { id: ev.id ?? ev.tempId, nombre: ev.nombre,
+             url: ev.preview ?? ev.url,
+             preview: ev.tipo === 'image' ? (ev.preview ?? ev.url) : null,
+             isImage: ev.tipo === 'image', tipo: ev.tipo, size: ev.size }
+  }
+
+  // Prefer DB data (when loaded); fall back to in-memory (current-session completions)
+  const rawCompleted      = dbEvidencias !== null ? dbEvidencias : (task.evidencias ?? [])
+  const completedEvidence = rawCompleted.map(normalizeEv)
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -501,25 +535,73 @@ export default function TaskDetail() {
                 </div>
               )}
 
-              {/* Vista: tarea ya completada (evidencia guardada en FieldContext) */}
-              {isCompleted && completedEvidence.length > 0 && (
-                <div className="space-y-2.5">
-                  {/* Imágenes en grid */}
-                  {completedEvidence.filter(e => e.tipo === 'image').length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {completedEvidence.filter(e => e.tipo === 'image').map(e => (
-                        <a key={e.id} href={e.preview} target="_blank" rel="noreferrer"
-                          className="w-20 h-20 rounded-xl overflow-hidden border border-gray-100 bg-gray-50 flex-shrink-0">
-                          <img src={e.preview} alt={e.nombre} className="w-full h-full object-cover" />
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                  {/* Archivos en lista */}
-                  {completedEvidence.filter(e => e.tipo !== 'image').map(e => (
-                    <UploadRow key={e.id} item={{ ...e, status: 'done', isImage: false, tempId: e.id, error: null }} onRemove={null} />
-                  ))}
-                </div>
+              {/* Vista: tarea ya completada */}
+              {isCompleted && (
+                loadingEvid ? (
+                  <div className="flex items-center justify-center py-6">
+                    <div className="w-5 h-5 border-2 border-kof-red border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : completedEvidence.length > 0 ? (
+                  <div className="space-y-2.5">
+                    {/* Imágenes en grid */}
+                    {completedEvidence.filter(e => e.isImage).length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {completedEvidence.filter(e => e.isImage).map((e, i) => (
+                          <a key={e.id ?? i} href={e.url || e.preview || '#'}
+                            target={e.url ? '_blank' : '_self'} rel="noreferrer"
+                            className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-100 bg-gray-50 flex-shrink-0 block group">
+                            {(e.url || e.preview) ? (
+                              <img src={e.url || e.preview} alt={e.nombre} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-blue-50">
+                                <svg className="w-7 h-7 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                              </div>
+                            )}
+                            {/* Hover overlay */}
+                            {e.url && (
+                              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                              </div>
+                            )}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                    {/* Archivos no-imagen */}
+                    {completedEvidence.filter(e => !e.isImage).map((e, i) => {
+                      const extLabel = (e.tipo ?? '').toUpperCase().slice(0, 3) || 'FILE'
+                      const extColors = {
+                        PDF: 'bg-red-100 text-red-700',  XLS: 'bg-emerald-100 text-emerald-700',
+                        DOC: 'bg-indigo-100 text-indigo-700', VID: 'bg-purple-100 text-purple-700',
+                        MP4: 'bg-purple-100 text-purple-700', MOV: 'bg-purple-100 text-purple-700',
+                      }
+                      const cls = extColors[extLabel] ?? 'bg-gray-100 text-gray-600'
+                      return (
+                        <div key={e.id ?? i} className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2.5">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${cls}`}>
+                            <span className="text-[11px] font-bold">{extLabel}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-gray-700 truncate">{e.nombre}</p>
+                            {e.size && <p className="text-[10px] text-gray-400 mt-0.5">{formatSize(e.size)}</p>}
+                          </div>
+                          {e.url && (
+                            <a href={e.url} target="_blank" rel="noreferrer"
+                              className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0">
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                            </a>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : null
               )}
 
               {/* Vista: subidas activas/completadas en la sesión actual */}
@@ -556,7 +638,7 @@ export default function TaskDetail() {
               )}
 
               {/* Estado vacío */}
-              {uploadsArr.length === 0 && completedEvidence.length === 0 && (
+              {uploadsArr.length === 0 && !loadingEvid && completedEvidence.length === 0 && (
                 <div className="flex flex-col items-center py-6 text-center">
                   <svg className="w-8 h-8 text-gray-200 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />

@@ -1,15 +1,18 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import ProtectedRoute from './components/auth/ProtectedRoute'
-import AdminLayout from './components/layouts/AdminLayout'
-import AppLayout from './components/layouts/AppLayout'
-import Login from './pages/Login'
+import AdminLayout    from './components/layouts/AdminLayout'
+import AppLayout      from './components/layouts/AppLayout'
+import Login          from './pages/Login'
 import AdminDashboard from './pages/admin/Dashboard'
-import Users from './pages/admin/Users'
-import Routines from './pages/admin/Routines'
-import AppDashboard from './pages/app/Dashboard'
-import Tareas       from './pages/app/Tareas'
-import TaskDetail   from './pages/app/TaskDetail'
+import Users          from './pages/admin/Users'
+import UserProfile    from './pages/admin/UserProfile'
+import Routines       from './pages/admin/Routines'
+import VoBo           from './pages/admin/VoBo'
+import AppDashboard   from './pages/app/Dashboard'
+import Tareas         from './pages/app/Tareas'
+import TaskDetail     from './pages/app/TaskDetail'
+import Historial      from './pages/app/Historial'
 
 function RootRedirect() {
   const { user, role, loading } = useAuth()
@@ -46,9 +49,11 @@ export default function App() {
             }
           >
             <Route index element={<AdminDashboard />} />
-            <Route path="usuarios" element={<Users />} />
-            <Route path="rutinas" element={<Routines />} />
-            <Route path="reportes" element={<div className="p-8 text-gray-400 text-sm">Reportes — próximamente</div>} />
+            <Route path="usuarios"      element={<Users />} />
+            <Route path="usuarios/:id"  element={<UserProfile />} />
+            <Route path="rutinas"       element={<Routines />} />
+            <Route path="vobo"          element={<VoBo />} />
+            <Route path="reportes"      element={<div className="p-8 text-gray-400 text-sm">Reportes — próximamente</div>} />
           </Route>
 
           {/* Field routes */}
@@ -61,10 +66,11 @@ export default function App() {
             }
           >
             <Route index element={<AppDashboard />} />
-            <Route path="tareas"    element={<Tareas />} />
+            <Route path="tareas"     element={<Tareas />} />
             <Route path="tareas/:id" element={<TaskDetail />} />
-            <Route path="equipos"   element={<div className="p-4 text-gray-400">Equipos — próximamente</div>} />
-            <Route path="perfil"    element={<div className="p-4 text-gray-400">Perfil — próximamente</div>} />
+            <Route path="historial"  element={<Historial />} />
+            <Route path="equipos"    element={<div className="p-4 text-gray-400">Equipos — próximamente</div>} />
+            <Route path="perfil"     element={<div className="p-4 text-gray-400">Perfil — próximamente</div>} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
