@@ -1,10 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { logout } from '../../lib/auth'
-
-// Pending VoBo count — replace with Supabase real-time subscription in production
-const VOBO_PENDING = 4
+import { getPendingVoboCount } from '../../services/completionService'
 
 const NAV_ITEMS = [
   {
@@ -38,7 +36,6 @@ const NAV_ITEMS = [
   {
     to: '/admin/vobo',
     label: 'VoBo',
-    badge: VOBO_PENDING,
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -67,10 +64,17 @@ const ShieldIcon = () => (
 
 export default function AdminLayout() {
   const { user } = useAuth()
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen]   = useState(false)
+  const [voboPending, setVoboPending]   = useState(0)
 
   const nombre = user?.user_metadata?.nombre || user?.email?.split('@')[0] || 'Ejecutivo'
   const inicial = nombre[0]?.toUpperCase() ?? 'E'
+
+  useEffect(() => {
+    getPendingVoboCount()
+      .then(setVoboPending)
+      .catch(() => {}) // silencioso — el badge simplemente no aparece
+  }, [])
 
   function closeSidebar() {
     setSidebarOpen(false)
@@ -133,9 +137,9 @@ export default function AdminLayout() {
             >
               {item.icon}
               <span className="flex-1">{item.label}</span>
-              {item.badge > 0 && (
+              {(item.to === '/admin/vobo' ? voboPending : (item.badge ?? 0)) > 0 && (
                 <span className="ml-auto text-[10px] font-bold bg-kof-red text-white rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0 [.text-white_&]:bg-white [.text-white_&]:text-kof-red">
-                  {item.badge}
+                  {item.to === '/admin/vobo' ? voboPending : item.badge}
                 </span>
               )}
             </NavLink>
