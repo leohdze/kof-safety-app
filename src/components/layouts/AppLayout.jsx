@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { FieldProvider } from '../../context/FieldContext'
+import { logout } from '../../lib/auth'
 
 const navItems = [
   {
@@ -47,12 +48,7 @@ const navItems = [
 ]
 
 export default function AppLayout() {
-  const { user, signOut } = useAuth()
-
-  function handleSignOut() {
-    signOut() // fire-and-forget: clears localStorage sync, revokes token in background
-    window.location.href = '/login'
-  }
+  const { user } = useAuth()
 
   return (
     <FieldProvider>
@@ -83,7 +79,7 @@ export default function AppLayout() {
             <span className="text-sm font-bold text-gray-900">KOF Safety</span>
           </div>
           <button
-            onClick={handleSignOut}
+            onClick={logout}
             className="text-gray-400 hover:text-kof-red transition-colors p-2 rounded-xl hover:bg-red-50"
             aria-label="Cerrar sesión"
           >

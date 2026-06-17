@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { logout } from '../../lib/auth'
 
 // Pending VoBo count — replace with Supabase real-time subscription in production
 const VOBO_PENDING = 4
@@ -65,16 +66,11 @@ const ShieldIcon = () => (
 )
 
 export default function AdminLayout() {
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const nombre = user?.user_metadata?.nombre || user?.email?.split('@')[0] || 'Ejecutivo'
   const inicial = nombre[0]?.toUpperCase() ?? 'E'
-
-  function handleSignOut() {
-    signOut() // fire-and-forget: clears localStorage sync, revokes token in background
-    window.location.href = '/login'
-  }
 
   function closeSidebar() {
     setSidebarOpen(false)
@@ -158,7 +154,7 @@ export default function AdminLayout() {
             </div>
           </div>
           <button
-            onClick={handleSignOut}
+            onClick={logout}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-gray-400 hover:bg-red-50 hover:text-kof-red transition-all duration-150"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
