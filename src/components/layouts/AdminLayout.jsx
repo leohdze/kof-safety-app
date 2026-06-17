@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 
 const NAV_ITEMS = [
@@ -53,18 +53,14 @@ const ShieldIcon = () => (
 
 export default function AdminLayout() {
   const { user, signOut } = useAuth()
-  const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const nombre = user?.user_metadata?.nombre || user?.email?.split('@')[0] || 'Ejecutivo'
   const inicial = nombre[0]?.toUpperCase() ?? 'E'
 
-  async function handleSignOut() {
-    try {
-      await signOut()
-    } finally {
-      navigate('/login', { replace: true })
-    }
+  function handleSignOut() {
+    signOut() // fire-and-forget: clears localStorage sync, revokes token in background
+    window.location.href = '/login'
   }
 
   function closeSidebar() {

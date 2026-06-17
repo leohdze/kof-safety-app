@@ -1,19 +1,22 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
-  const { signIn, role } = useAuth()
-  const navigate = useNavigate()
+  const { signIn, user, role } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  // Redirect once role is known after successful login
   useEffect(() => {
-    if (role === 'executive') navigate('/admin', { replace: true })
-    if (role === 'field') navigate('/app', { replace: true })
-  }, [role, navigate])
+    if (!user) return
+    if (role === 'executive') { window.location.href = '/admin'; return }
+    if (role === 'field')     { window.location.href = '/app';   return }
+    // Authenticated but no recognized role
+    setError('Tu usuario no tiene un rol asignado. Contacta al administrador.')
+    setLoading(false)
+  }, [user, role])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -22,6 +25,7 @@ export default function Login() {
 
     try {
       await signIn(email, password)
+      // Redirect handled by the useEffect above once role updates
     } catch (err) {
       setError(err.message || 'Credenciales inválidas')
       setLoading(false)

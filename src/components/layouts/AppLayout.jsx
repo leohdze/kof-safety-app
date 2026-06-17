@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { FieldProvider } from '../../context/FieldContext'
 
@@ -48,14 +48,10 @@ const navItems = [
 
 export default function AppLayout() {
   const { user, signOut } = useAuth()
-  const navigate = useNavigate()
 
-  async function handleSignOut() {
-    try {
-      await signOut()
-    } finally {
-      navigate('/login', { replace: true })
-    }
+  function handleSignOut() {
+    signOut() // fire-and-forget: clears localStorage sync, revokes token in background
+    window.location.href = '/login'
   }
 
   return (
