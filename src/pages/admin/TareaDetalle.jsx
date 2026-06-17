@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
-  MOCK_TAREAS, PRIORIDAD_CFG, CLASIF_CFG,
+  PRIORIDAD_CFG, CLASIF_CFG,
   getStatusTarea, STATUS_CFG, countdown, fmtDateTime, timeAgo,
 } from '../../data/mockTareas'
+import { getTaskById } from '../../services/taskService'
 
 const TYPE_ICON = {
   image: { bg: 'bg-blue-100', text: 'text-blue-600', label: 'FOTO' },
@@ -89,7 +90,22 @@ function TsdRow({ tsd, tareaId, requiereVobo }) {
 export default function TareaDetalle() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const tarea = MOCK_TAREAS.find(t => String(t.id) === String(id))
+  const [tarea, setTarea] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    getTaskById(id).then(setTarea).finally(() => setLoading(false))
+  }, [id])
+
+  if (loading) {
+    return (
+      <div className="p-6 text-center py-20">
+        <div className="w-8 h-8 border-2 border-kof-red border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+        <p className="text-sm text-gray-400 font-medium">Cargando tarea...</p>
+      </div>
+    )
+  }
 
   if (!tarea) {
     return (

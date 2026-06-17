@@ -1,4 +1,6 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useState, useEffect } from 'react'
+import { useAuth } from './AuthContext'
+import { getMyAssignments } from '../services/assignmentService'
 
 // ─── Helpers exportados (usados en Home, Tareas y TaskDetail) ─────────────────
 
@@ -192,18 +194,38 @@ const INITIAL_TASKS = [
 const FieldContext = createContext(null)
 
 export function FieldProvider({ children }) {
-  const [tasks, setTasks] = useState(INITIAL_TASKS)
+  const { user } = useAuth()
+  const [tasks, setTasks]       = useState(INITIAL_TASKS)
+  const [loading, setLoading]   = useState(false)
+  const [fromDB, setFromDB]     = useState(false)
+
+  useEffect(() => {
+    if (!user?.id) return
+    setLoading(true)
+    getMyAssignments(user.id)
+      .then(dbTasks => {
+        if (dbTasks.length > 0) {
+          setTasks(dbTasks)
+          setFromDB(true)
+        }
+        // Si no hay tareas en DB, INITIAL_TASKS sigue activo como fallback
+      })
+      .catch(err => {
+        console.warn('[FieldContext] Supabase unavailable, using mock tasks:', err.message)
+      })
+      .finally(() => setLoading(false))
+  }, [user?.id])
 
   function completeTask(id, { evidencias, comentario }) {
     setTasks(ts => ts.map(t =>
-      t.id === id
+      String(t.id) === String(id)
         ? { ...t, estado: 'completada', completadaEn: Date.now(), evidencias, comentario }
         : t
     ))
   }
 
   return (
-    <FieldContext.Provider value={{ tasks, completeTask }}>
+    <FieldContext.Provider value={{ tasks, completeTask, loading, fromDB }}>
       {children}
     </FieldContext.Provider>
   )

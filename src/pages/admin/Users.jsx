@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Modal from '../../components/common/Modal'
-import { MOCK_USERS } from '../../data/mockUsers'
+import { getUsers, createUserProfile, updateUserProfile } from '../../services/userService'
 
 const REGIONES = [
   'Coecillo', 'Tenango', 'Pacífico', 'Tlaxcala', 'Toluca',
@@ -124,7 +124,8 @@ function UserForm({ form, setForm, isEdit, onSubmit, onCancel }) {
 
 export default function Users() {
   const navigate = useNavigate()
-  const [users, setUsers] = useState(MOCK_USERS)
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterRol, setFilterRol] = useState('todos')
   const [filterActivo, setFilterActivo] = useState('todos')
@@ -132,6 +133,11 @@ export default function Users() {
   const [editUser, setEditUser] = useState(null)
   const [form, setForm] = useState(BLANK_FORM)
   const [confirmDeactivate, setConfirmDeactivate] = useState(null)
+
+  useEffect(() => {
+    setLoading(true)
+    getUsers().then(setUsers).finally(() => setLoading(false))
+  }, [])
 
   const filtered = users.filter(u => {
     const matchSearch = u.nombre.toLowerCase().includes(search.toLowerCase()) ||
@@ -152,12 +158,23 @@ export default function Users() {
     setModal('edit')
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
-    if (modal === 'create') {
-      setUsers(u => [...u, { ...form, id: Date.now() }])
-    } else {
-      setUsers(u => u.map(x => x.id === editUser.id ? { ...x, ...form } : x))
+    try {
+      if (modal === 'create') {
+        const newUser = await createUserProfile(form)
+        setUsers(u => [...u, newUser])
+      } else {
+        const updated = await updateUserProfile(editUser.id, form)
+        setUsers(u => u.map(x => x.id === editUser.id ? updated : x))
+      }
+    } catch (err) {
+      console.warn('[Users] save error, aplicando solo localmente:', err.message)
+      if (modal === 'create') {
+        setUsers(u => [...u, { ...form, id: Date.now() }])
+      } else {
+        setUsers(u => u.map(x => x.id === editUser.id ? { ...x, ...form } : x))
+      }
     }
     setModal(null)
   }
@@ -206,7 +223,13 @@ export default function Users() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      {loading && (
+        <div className="py-12 text-center">
+          <div className="w-8 h-8 border-2 border-kof-red border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm text-gray-400 font-medium">Cargando usuarios...</p>
+        </div>
+      )}
+      {!loading && <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -288,7 +311,7 @@ export default function Users() {
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
 
       {/* Create / Edit Modal */}
       <Modal

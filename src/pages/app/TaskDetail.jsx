@@ -39,6 +39,7 @@ import { useAuth } from '../../context/AuthContext'
 import {
   useField, getStatus, getUrgencyLevel, URGENCY_STYLE, formatDeadline,
 } from '../../context/FieldContext'
+import { submitCompletion } from '../../services/completionService'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -165,7 +166,7 @@ export default function TaskDetail() {
   const { user }                  = useAuth()
   const { tasks, completeTask }   = useField()
 
-  const task   = tasks.find(t => t.id === Number(id))
+  const task   = tasks.find(t => String(t.id) === String(id))
   const status = task ? getStatus(task) : null
   const level  = task ? getUrgencyLevel(task) : null
   const isCompleted = status === 'completada'
@@ -342,6 +343,25 @@ export default function TaskDetail() {
         size:    u.size,
         preview: u.url,
       }))
+
+    // Si la tarea vino de Supabase, registrar la entrega en DB
+    if (task.assignmentId && task.taskId && user?.id) {
+      const evidenceIds = Object.values(uploadsMap)
+        .filter(u => u.status === 'done' && u.evidenceId)
+        .map(u => u.evidenceId)
+      try {
+        await submitCompletion({
+          assignmentId: task.assignmentId,
+          taskId:       task.taskId,
+          userId:       user.id,
+          isOnTime:     task.fechaLimite > Date.now(),
+          comments:     comentario || null,
+          evidenceIds,
+        })
+      } catch (err) {
+        console.warn('[TaskDetail] submitCompletion error:', err.message)
+      }
+    }
 
     completeTask(task.id, { evidencias: doneUploads, comentario })
     setDone(true)

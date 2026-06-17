@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  MOCK_TAREAS, PERIODICIDADES, PRIORIDAD_CFG, CLASIF_CFG, EVIDENCIAS,
+  PERIODICIDADES, PRIORIDAD_CFG, CLASIF_CFG, EVIDENCIAS,
   TIPO_ASIGNACION, getStatusTarea, STATUS_CFG, countdown, initials,
 } from '../../data/mockTareas'
+import { getTasks, createTask, updateTask } from '../../services/taskService'
 
 // ─── Sub-componentes de formulario ────────────────────────────────────────────
 
@@ -289,13 +290,19 @@ const STATUS_TABS = ['Todas', 'En tiempo', 'Por vencer', 'Vencidas']
 
 export default function Tareas() {
   const navigate = useNavigate()
-  const [tareas, setTareas] = useState(MOCK_TAREAS)
+  const [tareas, setTareas] = useState([])
+  const [loading, setLoading] = useState(true)
   const [clasifTab, setClasifTab] = useState('Todas')
   const [statusTab, setStatusTab] = useState('Todas')
   const [filtPrioridad, setFiltPrioridad] = useState('')
   const [filtPeriodicidad, setFiltPeriodicidad] = useState('')
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState(null) // null | 'new' | { tarea }
+
+  useEffect(() => {
+    setLoading(true)
+    getTasks().then(setTareas).finally(() => setLoading(false))
+  }, [])
 
   const filtered = useMemo(() => {
     return tareas.filter(t => {
@@ -315,11 +322,22 @@ export default function Tareas() {
     })
   }, [tareas, clasifTab, statusTab, filtPrioridad, filtPeriodicidad, search])
 
-  function handleSave(form) {
-    if (modal?.tarea) {
-      setTareas(ts => ts.map(t => t.id === modal.tarea.id ? { ...t, ...form } : t))
-    } else {
-      setTareas(ts => [...ts, { ...form, id: Date.now(), tsds: [], activa: true }])
+  async function handleSave(form) {
+    try {
+      if (modal?.tarea) {
+        await updateTask(modal.tarea.id, form)
+        setTareas(ts => ts.map(t => t.id === modal.tarea.id ? { ...t, ...form } : t))
+      } else {
+        const newTarea = await createTask(form)
+        setTareas(ts => [...ts, newTarea])
+      }
+    } catch (err) {
+      console.warn('[Tareas] save error, aplicando solo localmente:', err.message)
+      if (modal?.tarea) {
+        setTareas(ts => ts.map(t => t.id === modal.tarea.id ? { ...t, ...form } : t))
+      } else {
+        setTareas(ts => [...ts, { ...form, id: Date.now(), tsds: [], activa: true }])
+      }
     }
   }
 
@@ -407,7 +425,12 @@ export default function Tareas() {
       </div>
 
       {/* Lista */}
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="py-16 text-center">
+          <div className="w-8 h-8 border-2 border-kof-red border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm text-gray-400 font-medium">Cargando tareas...</p>
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="py-16 text-center">
           <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
             <svg className="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

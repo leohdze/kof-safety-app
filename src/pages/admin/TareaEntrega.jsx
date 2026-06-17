@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { MOCK_TAREAS, fmtDateTime, timeAgo } from '../../data/mockTareas'
+import { fmtDateTime, timeAgo } from '../../data/mockTareas'
+import { getTaskById } from '../../services/taskService'
+import { updateVobo } from '../../services/completionService'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -162,11 +164,26 @@ export default function TareaEntrega() {
   const { id, tsdId } = useParams()
   const navigate = useNavigate()
 
-  const tarea = MOCK_TAREAS.find(t => String(t.id) === String(id))
+  const [tarea, setTarea] = useState(null)
+  const [loading, setLoading] = useState(true)
   const [voboEstado, setVoboEstado] = useState(null)  // override local
   const [motivoLocal, setMotivoLocal] = useState(null)
   const [showRechazar, setShowRechazar] = useState(false)
   const [confirmAprobado, setConfirmAprobado] = useState(false)
+
+  useEffect(() => {
+    setLoading(true)
+    getTaskById(id).then(setTarea).finally(() => setLoading(false))
+  }, [id])
+
+  if (loading) {
+    return (
+      <div className="p-6 text-center py-20">
+        <div className="w-8 h-8 border-2 border-kof-red border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+        <p className="text-sm text-gray-400 font-medium">Cargando...</p>
+      </div>
+    )
+  }
 
   if (!tarea) {
     return (
@@ -201,12 +218,20 @@ export default function TareaEntrega() {
     setMotivoLocal(null)
     setConfirmAprobado(true)
     setTimeout(() => setConfirmAprobado(false), 3000)
+    if (tsd.completionId) {
+      updateVobo(tsd.completionId, 'approved', null)
+        .catch(err => console.warn('[TareaEntrega] vobo approve error:', err.message))
+    }
   }
 
   function handleRechazar(motivo) {
     setVoboEstado('rechazado')
     setMotivoLocal(motivo)
     setShowRechazar(false)
+    if (tsd.completionId) {
+      updateVobo(tsd.completionId, 'rejected', motivo)
+        .catch(err => console.warn('[TareaEntrega] vobo reject error:', err.message))
+    }
   }
 
   return (
