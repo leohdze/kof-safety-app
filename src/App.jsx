@@ -7,7 +7,9 @@ import Login          from './pages/Login'
 import AdminDashboard from './pages/admin/Dashboard'
 import Users          from './pages/admin/Users'
 import UserProfile    from './pages/admin/UserProfile'
-import Routines       from './pages/admin/Routines'
+import TareasAdmin    from './pages/admin/Tareas'
+import TareaDetalle   from './pages/admin/TareaDetalle'
+import TareaEntrega   from './pages/admin/TareaEntrega'
 import VoBo           from './pages/admin/VoBo'
 import AppDashboard   from './pages/app/Dashboard'
 import Tareas         from './pages/app/Tareas'
@@ -51,8 +53,10 @@ export default function App() {
             <Route index element={<AdminDashboard />} />
             <Route path="usuarios"      element={<Users />} />
             <Route path="usuarios/:id"  element={<UserProfile />} />
-            <Route path="rutinas"       element={<Routines />} />
-            <Route path="vobo"          element={<VoBo />} />
+            <Route path="tareas"               element={<TareasAdmin />} />
+            <Route path="tareas/:id"          element={<TareaDetalle />} />
+            <Route path="tareas/:id/tsd/:tsdId" element={<TareaEntrega />} />
+            <Route path="vobo"                element={<VoBo />} />
             <Route path="reportes"      element={<div className="p-8 text-gray-400 text-sm">Reportes — próximamente</div>} />
           </Route>
 
