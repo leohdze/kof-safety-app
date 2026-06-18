@@ -2,11 +2,12 @@ import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   PERIODICIDADES, PRIORIDAD_CFG, CLASIF_CFG, EVIDENCIAS,
-  TIPO_ASIGNACION, getStatusTarea, STATUS_CFG, countdown, initials,
+  TIPO_ASIGNACION, REGIONES, UOS, getStatusTarea, STATUS_CFG, countdown, initials,
 } from '../../data/mockTareas'
 import { getTasks, createTask, updateTask } from '../../services/taskService'
-import { createAssignments } from '../../services/assignmentService'
+import { createAssignments, getDistinctRegionsAndUOs } from '../../services/assignmentService'
 import { getFieldUsers } from '../../services/userService'
+import { supabase } from '../../lib/supabase'
 
 // ─── Sub-componentes de formulario ────────────────────────────────────────────
 
@@ -122,6 +123,21 @@ function TareaModal({ tarea, onClose, onSave }) {
   )
   const [fieldUsers, setFieldUsers]     = useState([])
   const [loadingUsers, setLoadingUsers] = useState(false)
+  const [regions, setRegions]           = useState(REGIONES)
+  const [uos, setUos]                   = useState(UOS)
+  const [pendingFiles, setPendingFiles] = useState([])
+  const [uploadedUrls, setUploadedUrls] = useState(tarea?.materialUrls ?? [])
+  const [saving, setSaving]             = useState(false)
+
+  // Cargar regiones/UOs reales de la BD
+  useEffect(() => {
+    getDistinctRegionsAndUOs()
+      .then(({ regions: r, uos: u }) => {
+        if (r.length) setRegions(r)
+        if (u.length) setUos(u)
+      })
+      .catch(() => {}) // mantiene fallback hardcoded
+  }, [])
 
   // Cargar TSDs cuando se selecciona el tipo 'usuario'
   useEffect(() => {
@@ -137,10 +153,31 @@ function TareaModal({ tarea, onClose, onSave }) {
   function handleTipo(tipo) {
     setForm(f => ({ ...f, asignacion: { tipo, valores: [] } }))
   }
-  function handleSave() {
+
+  async function handleSave() {
     if (!form.nombre.trim()) return
-    onSave(form)
-    onClose()
+    setSaving(true)
+    try {
+      let allUrls = [...uploadedUrls]
+      for (const file of pendingFiles) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+        const path = `${Date.now()}_${safeName}`
+        const { error: upErr } = await supabase.storage
+          .from('materiales')
+          .upload(path, file, { cacheControl: '3600', upsert: false })
+        if (upErr) throw upErr
+        const { data: urlData } = supabase.storage.from('materiales').getPublicUrl(path)
+        allUrls.push(urlData.publicUrl)
+      }
+      onSave({ ...form, materialUrls: allUrls })
+      onClose()
+    } catch (err) {
+      console.warn('[TareaModal] upload error:', err.message)
+      onSave({ ...form, materialUrls: uploadedUrls })
+      onClose()
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -236,7 +273,7 @@ function TareaModal({ tarea, onClose, onSave }) {
               />
             ) : (
               <CheckboxChips
-                items={TIPO_ASIGNACION[form.asignacion.tipo].items}
+                items={form.asignacion.tipo === 'region' ? regions : uos}
                 value={form.asignacion.valores}
                 onChange={vals => setForm(f => ({ ...f, asignacion: { ...f.asignacion, valores: vals } }))}
               />
@@ -271,6 +308,54 @@ function TareaModal({ tarea, onClose, onSave }) {
               }`} />
             </button>
           </div>
+
+          {/* Material de apoyo */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1.5">MATERIAL DE APOYO</label>
+            <div className="space-y-2">
+              {uploadedUrls.map((url, i) => {
+                const name = decodeURIComponent(url.split('/').pop().split('?')[0])
+                return (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-xl border border-blue-100">
+                    <svg className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                    <a href={url} target="_blank" rel="noreferrer" className="text-xs text-blue-700 truncate flex-1 hover:underline">{name}</a>
+                    <button type="button" onClick={() => setUploadedUrls(u => u.filter((_, j) => j !== i))}
+                      className="text-blue-400 hover:text-blue-700 flex-shrink-0">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )
+              })}
+              {pendingFiles.map((f, i) => (
+                <div key={i} className="flex items-center gap-2 px-3 py-2 bg-amber-50 rounded-xl border border-amber-100">
+                  <svg className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  <span className="text-xs text-amber-700 truncate flex-1">{f.name}</span>
+                  <button type="button" onClick={() => setPendingFiles(fs => fs.filter((_, j) => j !== i))}
+                    className="text-amber-400 hover:text-amber-700 flex-shrink-0">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+              <label className="flex items-center gap-2 cursor-pointer px-3 py-2.5 rounded-xl border-2 border-dashed border-gray-200 hover:border-kof-red/50 hover:bg-red-50/30 transition-colors">
+                <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                <span className="text-xs text-gray-500 font-medium">Agregar archivo</span>
+                <input type="file" className="sr-only" multiple
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.mp4,.mov"
+                  onChange={e => { setPendingFiles(p => [...p, ...Array.from(e.target.files)]); e.target.value = '' }}
+                />
+              </label>
+            </div>
+          </div>
         </div>
 
         {/* Footer */}
@@ -279,9 +364,9 @@ function TareaModal({ tarea, onClose, onSave }) {
             className="flex-1 py-3 rounded-xl text-sm font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors">
             Cancelar
           </button>
-          <button onClick={handleSave}
-            className="flex-1 py-3 rounded-xl text-sm font-semibold text-white bg-kof-red hover:bg-kof-red-dark active:scale-[0.98] transition-all shadow-sm shadow-kof-red/30">
-            {tarea ? 'Guardar cambios' : 'Crear tarea'}
+          <button onClick={handleSave} disabled={saving}
+            className="flex-1 py-3 rounded-xl text-sm font-semibold text-white bg-kof-red hover:bg-kof-red-dark active:scale-[0.98] transition-all shadow-sm shadow-kof-red/30 disabled:opacity-50 disabled:cursor-not-allowed">
+            {saving ? 'Guardando...' : (tarea ? 'Guardar cambios' : 'Crear tarea')}
           </button>
         </div>
       </div>

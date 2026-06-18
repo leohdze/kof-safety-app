@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
   useField, getStatus, getUrgencyLevel, urgencyLabel,
   URGENCY_STYLE, formatDeadline,
 } from '../../context/FieldContext'
+import { supabase } from '../../lib/supabase'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -85,14 +86,37 @@ export default function AppHome() {
   const { tasks, profile }  = useField()
   const navigate            = useNavigate()
   const [filter, setFilter] = useState('hoy')
+  const [realStats, setRealStats] = useState(null)
 
   const nombre    = profile?.full_name || user?.user_metadata?.nombre || user?.email?.split('@')[0] || 'Usuario'
   const firstName = nombre.split(' ')[0]
 
   const sod = startOfToday()
-  const pendientesHoy  = tasks.filter(t => getStatus(t) === 'pendiente' && t.fechaLimite >= sod && t.fechaLimite < sod + D).length
-  const completadasHoy = tasks.filter(t => t.estado === 'completada'    && (t.completadaEn ?? 0) >= sod).length
-  const vencidas       = tasks.filter(t => getStatus(t) === 'vencida').length
+
+  useEffect(() => {
+    if (!user?.id) return
+    const sodIso = new Date(sod).toISOString()
+    const eodIso = new Date(sod + D).toISOString()
+    const nowIso = new Date().toISOString()
+    Promise.all([
+      supabase.from('task_assignments').select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id).eq('status', 'pending').gte('due_date', sodIso).lt('due_date', eodIso),
+      supabase.from('task_completions').select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id).gte('completed_at', sodIso),
+      supabase.from('task_assignments').select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id).eq('status', 'pending').lt('due_date', nowIso),
+    ]).then(([pRes, cRes, vRes]) => {
+      setRealStats({
+        pendientesHoy:  pRes.count ?? 0,
+        completadasHoy: cRes.count ?? 0,
+        vencidas:       vRes.count ?? 0,
+      })
+    }).catch(() => {})
+  }, [user?.id])
+
+  const pendientesHoy  = realStats?.pendientesHoy  ?? tasks.filter(t => getStatus(t) === 'pendiente' && t.fechaLimite >= sod && t.fechaLimite < sod + D).length
+  const completadasHoy = realStats?.completadasHoy ?? tasks.filter(t => t.estado === 'completada'    && (t.completadaEn ?? 0) >= sod).length
+  const vencidas       = realStats?.vencidas       ?? tasks.filter(t => getStatus(t) === 'vencida').length
 
   const filtered = getFilteredTasks(tasks, filter)
 

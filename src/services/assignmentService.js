@@ -22,9 +22,23 @@ function normalizeAssignment(row) {
       photo: 'Foto', pdf: 'PDF', excel: 'Excel', word: 'Word', video: 'Video',
     }[t] ?? t)),
     requiereVobo:  task.requires_vobo ?? false,
-    materialApoyo: task.material_url
-      ? [{ nombre: 'Material de apoyo', tipo: 'PDF', url: task.material_url }]
-      : [],
+    materialApoyo: (() => {
+      const u = task.material_url
+      if (!u) return []
+      try {
+        const parsed = JSON.parse(u)
+        if (Array.isArray(parsed)) return parsed.map((url, i) => {
+          const ext = url.split('.').pop().toLowerCase().split('?')[0]
+          const tipo = ['jpg','jpeg','png','heic','webp'].includes(ext) ? 'image'
+            : ext === 'pdf' ? 'pdf'
+            : ['xls','xlsx'].includes(ext) ? 'excel'
+            : ['doc','docx'].includes(ext) ? 'word'
+            : ['mp4','mov','avi'].includes(ext) ? 'video' : 'pdf'
+          return { nombre: `Material ${i + 1}`, tipo, url }
+        })
+      } catch {}
+      return [{ nombre: 'Material de apoyo', tipo: 'pdf', url: u }]
+    })(),
     fechaLimite:  due ? new Date(due).getTime() : Date.now() + 7 * 86400000,
     estado:       isCompleted ? 'completada' : row.status === 'overdue' ? 'pendiente' : 'pendiente',
     completadaEn: latest?.completed_at ? new Date(latest.completed_at).getTime() : null,
@@ -101,10 +115,11 @@ export async function createAssignments(taskId, dueDate, { tipo, valores }) {
   let profiles = []
 
   if (tipo === 'region') {
+    const orFilters = valores.map(v => `region.ilike.%${v}%`).join(',')
     const { data, error } = await supabase
       .from('user_profiles')
       .select('id, region, uo')
-      .in('region', valores)
+      .or(orFilters)
       .eq('role', 'field')
       .neq('is_active', false)
     if (error) throw new Error(`Consulta de región: ${error.message}`)
@@ -157,4 +172,18 @@ export async function createAssignments(taskId, dueDate, { tipo, valores }) {
 
   if (error) throw new Error(`Insertar asignaciones: ${error.message}`)
   return (data ?? []).length
+}
+
+export async function getDistinctRegionsAndUOs() {
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('region, uo')
+    .eq('role', 'field')
+    .neq('is_active', false)
+  if (error) throw error
+  const regions = [...new Set((data ?? []).map(p => p.region).filter(Boolean))].sort()
+  const uos = [...new Set((data ?? []).flatMap(p =>
+    Array.isArray(p.uo) ? p.uo : (p.uo ? [p.uo] : [])
+  ).filter(Boolean))].sort()
+  return { regions, uos }
 }

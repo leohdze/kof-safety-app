@@ -148,13 +148,12 @@ export default function VoBo() {
     || 'Ejecutivo'
 
   async function approve(item) {
-    // Optimistic update
     const now = Date.now()
     setItems(prev => prev.map(i => i.id === item.id
       ? { ...i, estado: 'aprobado', aprobadoPor: execNombre, aprobadoEn: now }
       : i
     ))
-    // Persist (no-op si es mock id)
+    window.dispatchEvent(new Event('vobo-updated'))
     if (!String(item.id).startsWith('mock-')) {
       updateVobo(item.id, 'approved', null)
         .catch(err => console.warn('[VoBo] approve error:', err.message))
@@ -167,6 +166,7 @@ export default function VoBo() {
       : i
     ))
     setRejectTarget(null)
+    window.dispatchEvent(new Event('vobo-updated'))
     if (!String(item.id).startsWith('mock-')) {
       updateVobo(item.id, 'rejected', motivo)
         .catch(err => console.warn('[VoBo] reject error:', err.message))

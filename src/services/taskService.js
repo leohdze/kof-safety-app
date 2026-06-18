@@ -63,6 +63,11 @@ function normalizeTask(dbTask) {
     evidencias:    normalizeEvidTypes(dbTask.evidence_types),
     fechaLimite:   dbTask.due_date ? new Date(dbTask.due_date).getTime() : Date.now() + 7 * 86400000,
     activa:        dbTask.is_active,
+    materialUrls:  (() => {
+      const u = dbTask.material_url
+      if (!u) return []
+      try { const p = JSON.parse(u); return Array.isArray(p) ? p : [u] } catch { return [u] }
+    })(),
     asignacion:    { tipo: 'usuario', valores: assignments.map(a => a.user_id) },
     tsds:          assignments.map(normalizeTsd),
   }
@@ -72,7 +77,7 @@ function normalizeTask(dbTask) {
 
 const TASK_SELECT_SUMMARY = `
   id, title, description, classification, priority, periodicity,
-  due_date, requires_vobo, evidence_types, is_active, created_at,
+  due_date, requires_vobo, evidence_types, is_active, material_url, created_at,
   task_assignments (
     id, user_id, uo, region, due_date, status,
     task_completions ( id, vobo_status, completed_at, is_on_time, attempt_number )
@@ -167,6 +172,7 @@ export async function getTaskById(id) {
 
 export async function createTask(formData) {
   const { data: { user } } = await supabase.auth.getUser()
+  const urls = formData.materialUrls ?? []
   const { data, error } = await supabase
     .from('tasks')
     .insert({
@@ -179,6 +185,7 @@ export async function createTask(formData) {
       due_date:       formData.fechaLimite ? new Date(formData.fechaLimite).toISOString() : null,
       requires_vobo:  formData.requiereVobo,
       evidence_types: toDbEvidTypes(formData.evidencias),
+      material_url:   urls.length ? JSON.stringify(urls) : null,
       is_active:      true,
       created_by:     user.id,
     })
@@ -190,6 +197,7 @@ export async function createTask(formData) {
 }
 
 export async function updateTask(id, formData) {
+  const urls = formData.materialUrls ?? []
   const { error } = await supabase
     .from('tasks')
     .update({
@@ -200,6 +208,7 @@ export async function updateTask(id, formData) {
       periodicity:    formData.periodicidad,
       requires_vobo:  formData.requiereVobo,
       evidence_types: toDbEvidTypes(formData.evidencias),
+      material_url:   urls.length ? JSON.stringify(urls) : null,
     })
     .eq('id', id)
 

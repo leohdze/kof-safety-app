@@ -71,9 +71,16 @@ export default function AdminLayout() {
   const inicial = nombre[0]?.toUpperCase() ?? 'E'
 
   useEffect(() => {
-    getPendingVoboCount()
-      .then(setVoboPending)
-      .catch(() => {}) // silencioso — el badge simplemente no aparece
+    async function refreshCount() {
+      try { setVoboPending(await getPendingVoboCount()) } catch {}
+    }
+    refreshCount()
+    const interval = setInterval(refreshCount, 60000)
+    window.addEventListener('vobo-updated', refreshCount)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('vobo-updated', refreshCount)
+    }
   }, [])
 
   function closeSidebar() {
