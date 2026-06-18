@@ -54,16 +54,17 @@ export async function getUserProfile(id) {
 }
 
 export async function createUserProfile(formData) {
-  // Crear usuario en auth via admin API (requiere service role key en servidor)
-  // En el cliente usamos la API pública de signUp y luego insertamos el perfil.
-  const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
+  // signUp funciona desde el browser; el rol va en user_metadata como fallback
+  // (AuthContext lee app_metadata.role || user_metadata.role)
+  const { data: authData, error: authErr } = await supabase.auth.signUp({
     email:    formData.correo,
     password: formData.password,
-    email_confirm: true,
-    app_metadata: { role: formData.rol },
-    user_metadata: { nombre: formData.nombre },
+    options: {
+      data: { nombre: formData.nombre, role: formData.rol },
+    },
   })
   if (authErr) throw authErr
+  if (!authData.user?.id) throw new Error('No se pudo crear el usuario — verifica que el correo no esté en uso.')
 
   const { data, error } = await supabase
     .from('user_profiles')

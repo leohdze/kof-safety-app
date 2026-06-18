@@ -199,24 +199,38 @@ export function FieldProvider({ children }) {
   const [tasks, setTasks]       = useState(INITIAL_TASKS)
   const [loading, setLoading]   = useState(false)
   const [fromDB, setFromDB]     = useState(false)
+  const [usingMock, setUsingMock] = useState(false)
   const [profile, setProfile]   = useState(null)
+
+  async function loadTasksFromDB(uid) {
+    setLoading(true)
+    try {
+      const dbTasks = await getMyAssignments(uid)
+      if (dbTasks.length > 0) {
+        setTasks(dbTasks)
+        setFromDB(true)
+        setUsingMock(false)
+      } else {
+        setUsingMock(true)
+      }
+    } catch (err) {
+      console.warn('[FieldContext] Supabase unavailable, using mock tasks:', err.message)
+      setUsingMock(true)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Cargar asignaciones activas
   useEffect(() => {
     if (!user?.id) return
-    setLoading(true)
-    getMyAssignments(user.id)
-      .then(dbTasks => {
-        if (dbTasks.length > 0) {
-          setTasks(dbTasks)
-          setFromDB(true)
-        }
-      })
-      .catch(err => {
-        console.warn('[FieldContext] Supabase unavailable, using mock tasks:', err.message)
-      })
-      .finally(() => setLoading(false))
+    loadTasksFromDB(user.id)
   }, [user?.id])
+
+  async function refreshTasks() {
+    if (!user?.id) return
+    await loadTasksFromDB(user.id)
+  }
 
   // Cargar perfil del TSD
   useEffect(() => {
@@ -241,7 +255,7 @@ export function FieldProvider({ children }) {
   }
 
   return (
-    <FieldContext.Provider value={{ tasks, completeTask, loading, fromDB, profile }}>
+    <FieldContext.Provider value={{ tasks, completeTask, loading, fromDB, usingMock, profile, refreshTasks }}>
       {children}
     </FieldContext.Provider>
   )

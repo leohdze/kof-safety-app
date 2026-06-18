@@ -1,63 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const H    = 3600000
-const D    = 86400000
-const BASE = Date.now()
-
-const PROXIMOS = [
-  { id: 1, rutina: 'Inspección de extintores',          tsd: 'Benjamin Torres Tapia',          uo: 'Coecillo',            vence: BASE + 47   * H },
-  { id: 2, rutina: 'Revisión de EPP',                   tsd: 'Cristina Rodriguez Valdez',       uo: 'Pacífico',            vence: BASE + 31   * H },
-  { id: 3, rutina: 'Check-list de vehículos',           tsd: 'Gustavo Sanchez Avendaño',        uo: 'Atlihuetzía',         vence: BASE + 22   * H },
-  { id: 4, rutina: 'Auditoría de botiquines',           tsd: 'Eder Luis Hernandez Alcocer',     uo: 'KM17',                vence: BASE + 9    * H },
-  { id: 5, rutina: 'Revisión de señalética',            tsd: 'Andrea Gadiel Corona Hernandez',  uo: 'Renacimiento',        vence: BASE + 4    * H },
-  { id: 6, rutina: 'Limpieza y orden 5S',               tsd: 'Mayra del Carmen Ramirez Tavera', uo: 'Polvorín',            vence: BASE + 1.5  * H },
-]
-
-const VENCIDAS = [
-  { id: 1, rutina: 'Evaluación de riesgos trimestral',  tsd: 'Teresa Castro Hernandez',         uo: 'Tlapa',               vencio: BASE - 1 * D },
-  { id: 2, rutina: 'Simulacro de evacuación',           tsd: 'Oscar Eduardo Brito Bustillos',   uo: 'Chilpancingo',        vencio: BASE - 2 * D },
-  { id: 3, rutina: 'Prueba de sistemas incendio',       tsd: 'Bernardo Galvez Altamirano',      uo: 'Ciel Puebla',         vencio: BASE - 3 * D },
-  { id: 4, rutina: 'Revisión de procedimientos',        tsd: 'Alan Miguel Irigoyen',            uo: 'Puebla Norte',        vencio: BASE - 5 * D },
-]
-
-const RANKING_TSDS = [
-  { nombre: 'Cristina Rodriguez Valdez',        uo: 'Pacífico',                    pct: 98, comp: 47, venc: 1  },
-  { nombre: 'Daniela Nava Gomez',               uo: 'Tenango, Ixtapan, Tejupilco', pct: 95, comp: 52, venc: 2  },
-  { nombre: 'Benjamin Torres Tapia',            uo: 'Coecillo',                    pct: 94, comp: 45, venc: 2  },
-  { nombre: 'Jose Angel Lopez Ortega',          uo: 'Litos Toluca',                pct: 91, comp: 39, venc: 3  },
-  { nombre: 'Hector M. Hernandez Jaimes',       uo: 'Progreso, Cuernavaca',        pct: 89, comp: 41, venc: 5  },
-  { nombre: 'Gustavo Sanchez Avendaño',         uo: 'Atlihuetzía',                 pct: 87, comp: 38, venc: 5  },
-  { nombre: 'Eder Luis Hernandez Alcocer',      uo: 'KM17, Cuauhtémoc',            pct: 85, comp: 36, venc: 5  },
-  { nombre: 'Jesus F. Juarez Hernandez',        uo: 'Huetamo, Valle de Bravo',     pct: 84, comp: 35, venc: 6  },
-  { nombre: 'Andrea Gadiel Corona Hernandez',   uo: 'Cayaco, Renacimiento, Tecpan',pct: 82, comp: 34, venc: 7  },
-  { nombre: 'Mayra del C. Ramirez Tavera',      uo: 'Polvorín, Puente de Ixtla',   pct: 80, comp: 33, venc: 8  },
-  { nombre: 'Alma Jessica Vidal Peñaloza',      uo: 'Taxco, Huitzuco, Iguala',     pct: 78, comp: 32, venc: 9  },
-  { nombre: 'Carlos E. Herrera Cortes',         uo: 'Mega Puebla',                 pct: 76, comp: 31, venc: 9  },
-  { nombre: 'Bernardo Galvez Altamirano',       uo: 'Ciel Puebla',                 pct: 74, comp: 30, venc: 10 },
-  { nombre: 'Jose Carlos Juarez Gutierrez',     uo: 'Puebla Sur',                  pct: 72, comp: 29, venc: 11 },
-  { nombre: 'Alan Miguel Irigoyen',             uo: 'Puebla Norte, Matamoros',     pct: 70, comp: 28, venc: 12 },
-  { nombre: 'Teresa Castro Hernandez',          uo: 'Tlapa, Chilapa',              pct: 65, comp: 25, venc: 13 },
-  { nombre: 'Oscar Eduardo Brito Bustillos',    uo: 'Tierra Colorada, Chilpancingo',pct: 60, comp: 23, venc: 15 },
-]
-
-const RANKING_INSTRUCTORES = Array.from({ length: 8 }, (_, i) => ({
-  nombre: `Instructor ${i + 1}`,
-  uo: '—',
-  pct: 0, comp: 0, venc: 0,
-  pendiente: true,
-}))
-
-const INACTIVIDAD = [
-  { nombre: 'Oscar Eduardo Brito Bustillos', uo: 'Chilpancingo', ts: BASE - 5   * D },
-  { nombre: 'Teresa Castro Hernandez',       uo: 'Tlapa',        ts: BASE - 4   * D },
-  { nombre: 'Alan Miguel Irigoyen',          uo: 'Puebla Norte', ts: BASE - 3.2 * D },
-]
+import { supabase } from '../../lib/supabase'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const H = 3600000
+const D = 86400000
 
 function countdown(targetMs) {
   const diff = targetMs - Date.now()
@@ -82,6 +31,7 @@ function daysLate(ts) {
 }
 
 function lastSeen(ts) {
+  if (!ts) return 'Sin actividad'
   const d = Math.floor((Date.now() - ts) / D)
   if (d >= 1) return `Hace ${d} ${d === 1 ? 'día' : 'días'}`
   return `Hace ${Math.floor((Date.now() - ts) / H)}h`
@@ -95,7 +45,7 @@ function pctTextColor(p) {
   return p >= 90 ? 'text-emerald-600' : p >= 70 ? 'text-blue-600' : p >= 50 ? 'text-amber-600' : 'text-kof-red'
 }
 
-function initials(n) {
+function initials(n = '') {
   return n.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()
 }
 
@@ -103,9 +53,123 @@ const TODAY = new Intl.DateTimeFormat('es-MX', {
   weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
 }).format(new Date())
 
-// ─── Sub-componentes ─────────────────────────────────────────────────────────
+// ─── Carga de datos reales ────────────────────────────────────────────────────
 
-function SectionCard({ title, count, action, children }) {
+async function loadDashboard() {
+  const now   = new Date()
+  const in48h = new Date(now.getTime() + 48 * H)
+  const ago30d = new Date(now.getTime() - 30 * D)
+  const ago3d  = new Date(now.getTime() - 3  * D)
+
+  // Fase 1: paralelo
+  const [proxRes, vencRes, usersRes, compRes] = await Promise.all([
+    supabase.from('task_assignments')
+      .select('id, due_date, user_id, tasks!inner(title)')
+      .eq('status', 'pending')
+      .gte('due_date', now.toISOString())
+      .lte('due_date', in48h.toISOString())
+      .order('due_date')
+      .limit(6),
+
+    supabase.from('task_assignments')
+      .select('id, due_date, user_id, tasks!inner(title)')
+      .in('status', ['pending', 'overdue'])
+      .not('due_date', 'is', null)
+      .lt('due_date', now.toISOString())
+      .order('due_date')
+      .limit(6),
+
+    supabase.from('user_profiles')
+      .select('id, full_name, region, uo')
+      .eq('role', 'field')
+      .neq('is_active', false),
+
+    supabase.from('task_completions')
+      .select('user_id, completed_at')
+      .gte('completed_at', ago30d.toISOString()),
+  ])
+
+  const fieldUsers    = usersRes.data ?? []
+  const fieldUserIds  = new Set(fieldUsers.map(u => u.id))
+  const profileMap    = {}
+  fieldUsers.forEach(u => { profileMap[u.id] = u })
+
+  // Fase 2: perfiles extra para proximos/vencidas + assignments de field users
+  const extraIds = [
+    ...(proxRes.data ?? []).map(a => a.user_id),
+    ...(vencRes.data ?? []).map(a => a.user_id),
+  ].filter(id => !profileMap[id])
+  const uniqueExtraIds = [...new Set(extraIds)]
+
+  const [extraProfRes, assignRes] = await Promise.all([
+    uniqueExtraIds.length > 0
+      ? supabase.from('user_profiles').select('id, full_name, region, uo').in('id', uniqueExtraIds)
+      : { data: [] },
+    fieldUsers.length > 0
+      ? supabase.from('task_assignments').select('user_id, status, due_date').in('user_id', [...fieldUserIds])
+      : { data: [] },
+  ])
+
+  ;(extraProfRes.data ?? []).forEach(p => { profileMap[p.id] = p })
+
+  function resolveUo(prof) {
+    if (!prof?.uo) return '—'
+    return Array.isArray(prof.uo) ? prof.uo.join(', ') : prof.uo
+  }
+
+  // Próximos a vencer
+  const proximos = (proxRes.data ?? []).map(a => {
+    const prof = profileMap[a.user_id] ?? {}
+    return { id: a.id, rutina: a.tasks?.title ?? '—', tsd: prof.full_name ?? 'TSD', uo: resolveUo(prof), vence: new Date(a.due_date).getTime() }
+  })
+
+  // Tareas vencidas
+  const vencidas = (vencRes.data ?? []).map(a => {
+    const prof = profileMap[a.user_id] ?? {}
+    return { id: a.id, rutina: a.tasks?.title ?? '—', tsd: prof.full_name ?? 'TSD', uo: resolveUo(prof), vencio: new Date(a.due_date).getTime() }
+  })
+
+  // Ranking TSDs
+  const allAssignments = assignRes.data ?? []
+  const assignByUser = {}
+  allAssignments.forEach(a => {
+    if (!assignByUser[a.user_id]) assignByUser[a.user_id] = { total: 0, completed: 0, overdue: 0 }
+    assignByUser[a.user_id].total++
+    if (a.status === 'completed') assignByUser[a.user_id].completed++
+    if (a.status !== 'completed' && a.due_date && new Date(a.due_date) < now) {
+      assignByUser[a.user_id].overdue++
+    }
+  })
+
+  const ranking = fieldUsers
+    .map(u => {
+      const d = assignByUser[u.id] ?? { total: 0, completed: 0, overdue: 0 }
+      const pct = d.total > 0 ? Math.round((d.completed / d.total) * 100) : 0
+      return { id: u.id, nombre: u.full_name, uo: resolveUo(u), pct, comp: d.completed, venc: d.overdue, total: d.total }
+    })
+    .sort((a, b) => b.pct - a.pct)
+
+  // Alertas de inactividad
+  const compByUser = {}
+  ;(compRes.data ?? []).forEach(c => {
+    if (!fieldUserIds.has(c.user_id)) return
+    if (!compByUser[c.user_id] || c.completed_at > compByUser[c.user_id]) {
+      compByUser[c.user_id] = c.completed_at
+    }
+  })
+
+  const inactivos = fieldUsers
+    .filter(u => { const last = compByUser[u.id]; return !last || new Date(last) < ago3d })
+    .map(u => ({ nombre: u.full_name, uo: resolveUo(u), ts: compByUser[u.id] ? new Date(compByUser[u.id]).getTime() : null }))
+    .sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0))
+    .slice(0, 5)
+
+  return { proximos, vencidas, ranking, inactivos, totalUsers: fieldUsers.length }
+}
+
+// ─── Sub-componentes ──────────────────────────────────────────────────────────
+
+function SectionCard({ title, count, action, children, loading }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-50">
@@ -117,7 +181,11 @@ function SectionCard({ title, count, action, children }) {
           {action}
         </div>
       </div>
-      {children}
+      {loading ? (
+        <div className="py-10 flex items-center justify-center">
+          <div className="w-5 h-5 border-2 border-kof-red/30 border-t-kof-red rounded-full animate-spin" />
+        </div>
+      ) : children}
     </div>
   )
 }
@@ -138,32 +206,30 @@ function Medal({ rank }) {
   return <span className="text-sm font-medium text-gray-400 w-6 text-center flex-shrink-0">{rank}</span>
 }
 
-// ─── Secciones ───────────────────────────────────────────────────────────────
-
-function QuickAccess({ navigate }) {
+function QuickAccess({ navigate, totalUsers }) {
   const items = [
     {
       label: 'Usuarios',
-      sub: '27 usuarios',
+      sub: totalUsers > 0 ? `${totalUsers} TSDs activos` : 'Gestión de usuarios',
       to: '/admin/usuarios',
       icon: <svg className="w-6 h-6 text-kof-red" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
     },
     {
       label: 'Rutinas',
-      sub: '22 rutinas activas',
-      to: '/admin/rutinas',
+      sub: 'Ver tareas activas',
+      to: '/admin/tareas',
       icon: <svg className="w-6 h-6 text-kof-red" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>,
     },
     {
-      label: 'Reportes',
-      sub: 'Próximamente',
-      to: '/admin/reportes',
-      icon: <svg className="w-6 h-6 text-kof-red" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
+      label: 'VoBo',
+      sub: 'Bandeja de revisión',
+      to: '/admin/vobo',
+      icon: <svg className="w-6 h-6 text-kof-red" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
     },
     {
       label: 'Nueva rutina',
       sub: 'Crear rápido',
-      to: '/admin/rutinas',
+      to: '/admin/tareas',
       highlight: true,
       icon: <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>,
     },
@@ -193,164 +259,174 @@ function QuickAccess({ navigate }) {
   )
 }
 
-function ProximosVencer({ now }) {
+function ProximosVencer({ items, loading }) {
   return (
-    <SectionCard title="Próximos a vencer" count={PROXIMOS.length}>
-      <div className="divide-y divide-gray-50">
-        {PROXIMOS.map(item => {
-          const cd = countdown(item.vence)
-          return (
+    <SectionCard title="Próximos a vencer" count={items.length} loading={loading}>
+      {items.length === 0 ? (
+        <div className="py-10 text-center text-sm text-gray-400">Sin tareas próximas a vencer</div>
+      ) : (
+        <div className="divide-y divide-gray-50">
+          {items.map(item => {
+            const cd = countdown(item.vence)
+            return (
+              <div key={item.id} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50/60 transition-colors">
+                <Avatar nombre={item.tsd} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800 truncate">{item.rutina}</p>
+                  <p className="text-xs text-gray-400 truncate">{item.tsd} · <span className="font-medium text-gray-500">{item.uo}</span></p>
+                </div>
+                <span className={`flex-shrink-0 text-xs font-bold px-2.5 py-1 rounded-full border ${CD_STYLES[cd.level]}`}>
+                  {cd.text}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </SectionCard>
+  )
+}
+
+function TareasVencidas({ items, loading }) {
+  return (
+    <SectionCard title="Tareas vencidas" count={items.length} loading={loading}>
+      {items.length === 0 ? (
+        <div className="py-10 text-center text-sm text-emerald-600 font-semibold">Sin tareas vencidas</div>
+      ) : (
+        <div className="divide-y divide-gray-50">
+          {items.map(item => (
             <div key={item.id} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50/60 transition-colors">
               <Avatar nombre={item.tsd} />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-gray-800 truncate">{item.rutina}</p>
                 <p className="text-xs text-gray-400 truncate">{item.tsd} · <span className="font-medium text-gray-500">{item.uo}</span></p>
               </div>
-              <span className={`flex-shrink-0 text-xs font-bold px-2.5 py-1 rounded-full border ${CD_STYLES[cd.level]}`}>
-                {cd.text}
-              </span>
+              <div className="flex-shrink-0 text-right">
+                <span className="text-xs font-bold text-kof-red bg-red-50 border border-red-100 px-2 py-0.5 rounded-full">
+                  +{daysLate(item.vencio)}
+                </span>
+              </div>
             </div>
-          )
-        })}
-      </div>
-    </SectionCard>
-  )
-}
-
-function TareasVencidas() {
-  return (
-    <SectionCard title="Tareas vencidas" count={VENCIDAS.length}>
-      <div className="divide-y divide-gray-50">
-        {VENCIDAS.map(item => (
-          <div key={item.id} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50/60 transition-colors">
-            <Avatar nombre={item.tsd} />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-800 truncate">{item.rutina}</p>
-              <p className="text-xs text-gray-400 truncate">{item.tsd} · <span className="font-medium text-gray-500">{item.uo}</span></p>
-            </div>
-            <div className="flex-shrink-0 text-right">
-              <span className="text-xs font-bold text-kof-red bg-red-50 border border-red-100 px-2 py-0.5 rounded-full">
-                +{daysLate(item.vencio)}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </SectionCard>
-  )
-}
-
-function RankingTSDs() {
-  const [tab, setTab] = useState('tsds')
-  const data = tab === 'tsds' ? RANKING_TSDS : RANKING_INSTRUCTORES
-
-  return (
-    <SectionCard
-      title="Ranking de desempeño"
-      action={
-        <div className="flex bg-gray-100 rounded-lg p-0.5">
-          {[['tsds', 'TSDs'], ['instructores', 'Instructores']].map(([val, lbl]) => (
-            <button key={val} onClick={() => setTab(val)}
-              className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${tab === val ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-              {lbl}
-            </button>
           ))}
         </div>
-      }
-    >
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-50 bg-gray-50/50">
-              <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide w-10">#</th>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Nombre</th>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide min-w-[160px]">% Cumplimiento</th>
-              <th className="text-right px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Completadas</th>
-              <th className="text-right px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Vencidas</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {data.map((item, i) => (
-              <tr key={item.nombre} className="hover:bg-gray-50/50 transition-colors">
-                <td className="px-4 py-3">
-                  <Medal rank={i + 1} />
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <Avatar nombre={item.nombre} />
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate max-w-[200px]">{item.nombre}</p>
-                      <p className="text-[11px] text-gray-400 truncate max-w-[200px]">{item.uo}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  {item.pendiente ? (
-                    <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Sin asignar</span>
-                  ) : (
-                    <div className="flex items-center gap-2 min-w-[140px]">
-                      <div className="flex-1 bg-gray-100 rounded-full h-1.5">
-                        <div
-                          className={`h-1.5 rounded-full transition-all ${pctBarColor(item.pct)}`}
-                          style={{ width: `${item.pct}%` }}
-                        />
-                      </div>
-                      <span className={`text-sm font-bold flex-shrink-0 w-10 text-right ${pctTextColor(item.pct)}`}>
-                        {item.pct}%
-                      </span>
-                    </div>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-sm font-medium text-gray-600 text-right">{item.comp}</td>
-                <td className="px-4 py-3 text-right">
-                  <span className={`text-sm font-bold ${item.venc > 0 ? 'text-kof-red' : 'text-gray-300'}`}>
-                    {item.venc}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      )}
     </SectionCard>
   )
 }
 
-function AlertasInactividad() {
+function RankingTSDs({ tsds, loading }) {
   return (
-    <SectionCard title="Alertas de inactividad" count={INACTIVIDAD.length}>
-      <div className="divide-y divide-gray-50">
-        {INACTIVIDAD.map(item => (
-          <div key={item.nombre} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50/60 transition-colors">
-            <div className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0 mt-0.5" />
-            <Avatar nombre={item.nombre} />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-800 truncate">{item.nombre}</p>
-              <p className="text-xs text-gray-400">{item.uo}</p>
+    <SectionCard title="Ranking de desempeño" loading={loading}>
+      {tsds.length === 0 ? (
+        <div className="py-10 text-center text-sm text-gray-400">Sin datos de TSDs aún</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-50 bg-gray-50/50">
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide w-10">#</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Nombre</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide min-w-[160px]">% Cumplimiento</th>
+                <th className="text-right px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Completadas</th>
+                <th className="text-right px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Vencidas</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {tsds.map((item, i) => (
+                <tr key={item.id ?? item.nombre} className="hover:bg-gray-50/50 transition-colors">
+                  <td className="px-4 py-3"><Medal rank={i + 1} /></td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <Avatar nombre={item.nombre} />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-800 truncate max-w-[200px]">{item.nombre}</p>
+                        <p className="text-[11px] text-gray-400 truncate max-w-[200px]">{item.uo}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {item.total === 0 ? (
+                      <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Sin asignar</span>
+                    ) : (
+                      <div className="flex items-center gap-2 min-w-[140px]">
+                        <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+                          <div className={`h-1.5 rounded-full ${pctBarColor(item.pct)}`} style={{ width: `${item.pct}%` }} />
+                        </div>
+                        <span className={`text-sm font-bold flex-shrink-0 w-10 text-right ${pctTextColor(item.pct)}`}>
+                          {item.pct}%
+                        </span>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-600 text-right">{item.comp}</td>
+                  <td className="px-4 py-3 text-right">
+                    <span className={`text-sm font-bold ${item.venc > 0 ? 'text-kof-red' : 'text-gray-300'}`}>
+                      {item.venc}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </SectionCard>
+  )
+}
+
+function AlertasInactividad({ items, loading }) {
+  return (
+    <SectionCard title="Alertas de inactividad" count={items.length} loading={loading}>
+      {items.length === 0 ? (
+        <div className="py-10 text-center text-sm text-emerald-600 font-semibold">Todos los TSDs activos recientemente</div>
+      ) : (
+        <div className="divide-y divide-gray-50">
+          {items.map(item => (
+            <div key={item.nombre} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50/60 transition-colors">
+              <div className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0 mt-0.5" />
+              <Avatar nombre={item.nombre} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-800 truncate">{item.nombre}</p>
+                <p className="text-xs text-gray-400">{item.uo}</p>
+              </div>
+              <span className="flex-shrink-0 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+                {lastSeen(item.ts)}
+              </span>
             </div>
-            <span className="flex-shrink-0 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
-              {lastSeen(item.ts)}
-            </span>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </SectionCard>
   )
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
+const EMPTY = { proximos: [], vencidas: [], ranking: [], inactivos: [], totalUsers: 0 }
+
 export default function AdminDashboard() {
-  const { user } = useAuth()
+  const { user }  = useAuth()
   const navigate  = useNavigate()
   const [now, setNow] = useState(Date.now())
+  const [data, setData] = useState(EMPTY)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 60000)
     return () => clearInterval(id)
   }, [])
 
-  const nombre = user?.user_metadata?.nombre || user?.email?.split('@')[0] || 'Ejecutivo'
+  const fetch = useCallback(() => {
+    setLoading(true)
+    loadDashboard()
+      .then(setData)
+      .catch(err => console.warn('[AdminDashboard] load error:', err.message))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { fetch() }, [fetch])
+
+  const nombre    = user?.user_metadata?.nombre || user?.email?.split('@')[0] || 'Ejecutivo'
   const firstName = nombre.split(' ')[0]
 
   return (
@@ -362,26 +438,37 @@ export default function AdminDashboard() {
           <h1 className="text-2xl font-bold text-gray-900">Hola, {firstName}</h1>
           <p className="text-sm text-gray-400 mt-0.5 capitalize">{TODAY}</p>
         </div>
-        <div className="hidden md:flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-full text-xs font-semibold flex-shrink-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          En línea
+        <div className="flex items-center gap-2">
+          {!loading && (
+            <button onClick={fetch}
+              className="hidden md:flex items-center gap-1.5 text-xs font-semibold text-gray-500 border border-gray-200 rounded-full px-3 py-1.5 hover:bg-gray-50 transition-colors">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Actualizar
+            </button>
+          )}
+          <div className="hidden md:flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-full text-xs font-semibold flex-shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            En línea
+          </div>
         </div>
       </div>
 
       {/* Accesos directos */}
-      <QuickAccess navigate={navigate} />
+      <QuickAccess navigate={navigate} totalUsers={data.totalUsers} />
 
       {/* Próximos a vencer + Vencidas */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 md:gap-6">
-        <ProximosVencer now={now} />
-        <TareasVencidas />
+        <ProximosVencer items={data.proximos} loading={loading} />
+        <TareasVencidas items={data.vencidas} loading={loading} />
       </div>
 
       {/* Ranking */}
-      <RankingTSDs />
+      <RankingTSDs tsds={data.ranking} loading={loading} />
 
       {/* Inactividad */}
-      <AlertasInactividad />
+      <AlertasInactividad items={data.inactivos} loading={loading} />
 
     </div>
   )

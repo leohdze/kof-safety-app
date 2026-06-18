@@ -164,7 +164,7 @@ export default function TaskDetail() {
   const { id }                    = useParams()
   const navigate                  = useNavigate()
   const { user }                  = useAuth()
-  const { tasks, completeTask }   = useField()
+  const { tasks, completeTask, refreshTasks } = useField()
 
   const task   = tasks.find(t => String(t.id) === String(id))
   const status = task ? getStatus(task) : null
@@ -367,6 +367,7 @@ export default function TaskDetail() {
 
     completeTask(task.id, { evidencias: doneUploads, comentario })
     setDone(true)
+    refreshTasks().catch(() => {})
   }
 
   // ── Early returns ────────────────────────────────────────────────────────────
