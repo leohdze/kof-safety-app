@@ -92,6 +92,8 @@ export default function UserProfile() {
     setLoading(true)
     setError(null)
 
+    console.log('[UserProfile] loading id:', id, typeof id)
+
     Promise.all([
       getUserProfile(id),
       supabase
@@ -106,6 +108,10 @@ export default function UserProfile() {
         .limit(50),
     ])
       .then(([prof, assignRes, compRes]) => {
+        console.log('[UserProfile] profile:', prof?.id, prof?.nombre)
+        console.log('[UserProfile] assignments:', assignRes.data?.length, 'error:', assignRes.error?.message)
+        console.log('[UserProfile] completions:', compRes.data?.length, 'error:', compRes.error?.message)
+
         if (!prof) { setError('Usuario no encontrado'); return }
         setProfile(prof)
 
@@ -122,8 +128,8 @@ export default function UserProfile() {
 
         const completadas = comps.length
         const vencidasN   = overdue.length
-        if (assignRes.error) console.warn('[UserProfile] assignments RLS/error:', assignRes.error.message)
-        if (compRes.error)   console.warn('[UserProfile] completions RLS/error:', compRes.error.message)
+        if (assignRes.error) console.warn('[UserProfile] assignments RLS bloqueado:', assignRes.error.message)
+        if (compRes.error)   console.warn('[UserProfile] completions RLS bloqueado:', compRes.error.message)
         setStats({
           total:         assignments.length,
           completadas,

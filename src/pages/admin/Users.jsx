@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Modal from '../../components/common/Modal'
 import { getUsers, createUserProfile, updateUserProfile } from '../../services/userService'
+import { getDistinctRegionsAndUOs } from '../../services/assignmentService'
 
 const REGIONES = [
   'Coecillo', 'Tenango', 'Pacífico', 'Tlaxcala', 'Toluca',
@@ -15,14 +16,32 @@ const BLANK_FORM = {
   subrole: 'TSD', region: 'Coecillo', uo: [], activo: true,
 }
 
-function UOChips({ value = [], onChange }) {
-  const [input, setInput] = useState('')
+const UO_FALLBACK = [
+  'Coecillo','Litos Toluca','Huetamo','Pacífico','Valle de Bravo',
+  'Ixtapan','Tejupilco','Tenango','Atlihuetzía','Cayaco',
+  'Cuauhtémoc','KM17','Renacimiento','Tecpan','Cuernavaca',
+  'Polvorín','Progreso','Puente de Ixtla','Chilapa','Chilpancingo',
+  'Iguala','Huitzuco','Taxco','Tierra Colorada','Tlapa',
+  'Ciel Puebla','Puebla Sur','Ecológica','Matamoros',
+  'Mega Puebla','Puebla Norte',
+]
 
-  function add() {
-    const v = input.trim()
-    if (!v || value.includes(v)) { setInput(''); return }
+function UOChips({ value = [], onChange }) {
+  const [allUOs, setAllUOs] = useState(UO_FALLBACK)
+
+  useEffect(() => {
+    getDistinctRegionsAndUOs()
+      .then(({ uos }) => { if (uos.length) setAllUOs(uos) })
+      .catch(() => {})
+  }, [])
+
+  const available = allUOs.filter(u => !value.includes(u))
+
+  function handleSelect(e) {
+    const v = e.target.value
+    if (!v) return
     onChange([...value, v])
-    setInput('')
+    e.target.value = ''
   }
 
   return (
@@ -42,21 +61,15 @@ function UOChips({ value = [], onChange }) {
           ))}
         </div>
       )}
-      <div className="flex gap-2">
-        <input
-          className="input-field flex-1 text-sm py-1.5"
-          placeholder="Ej: KM17"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add() }
-          }}
-        />
-        <button type="button" onClick={add}
-          className="px-3 py-1.5 bg-kof-red text-white text-sm font-bold rounded-xl hover:bg-kof-red-dark transition-colors flex-shrink-0">
-          +
-        </button>
-      </div>
+      <select
+        className="input-field w-full text-sm py-1.5 text-gray-500"
+        defaultValue=""
+        onChange={handleSelect}
+        disabled={available.length === 0}
+      >
+        <option value="" disabled>{available.length === 0 ? 'Todas asignadas' : '+ Agregar UO…'}</option>
+        {available.map(u => <option key={u} value={u}>{u}</option>)}
+      </select>
     </div>
   )
 }
