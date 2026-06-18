@@ -82,6 +82,7 @@ export default function UserProfile() {
   const [evidTab, setEvidTab] = useState('Todas')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [rlsError, setRlsError] = useState(null)
   const [profile, setProfile] = useState(null)
   const [stats, setStats] = useState(null)
   const [completions, setCompletions] = useState([])
@@ -91,8 +92,13 @@ export default function UserProfile() {
   useEffect(() => {
     setLoading(true)
     setError(null)
+    setRlsError(null)
 
     console.log('[UserProfile] loading id:', id, typeof id)
+
+    const startOfMonth = new Date()
+    startOfMonth.setDate(1)
+    startOfMonth.setHours(0, 0, 0, 0)
 
     Promise.all([
       getUserProfile(id),
@@ -104,13 +110,17 @@ export default function UserProfile() {
         .from('task_completions')
         .select('id, completed_at, is_on_time, vobo_status, tasks(id, title, periodicity), task_evidence(id, file_url, file_name, file_type)')
         .eq('user_id', id)
-        .order('completed_at', { ascending: false })
-        .limit(50),
+        .order('completed_at', { ascending: false }),
     ])
       .then(([prof, assignRes, compRes]) => {
         console.log('[UserProfile] profile:', prof?.id, prof?.nombre)
         console.log('[UserProfile] assignments:', assignRes.data?.length, 'error:', assignRes.error?.message)
         console.log('[UserProfile] completions:', compRes.data?.length, 'error:', compRes.error?.message)
+
+        const rlsErrs = []
+        if (assignRes.error) rlsErrs.push(`Asignaciones: ${assignRes.error.message}`)
+        if (compRes.error)   rlsErrs.push(`Completadas: ${compRes.error.message}`)
+        if (rlsErrs.length)  setRlsError(rlsErrs.join(' · '))
 
         if (!prof) { setError('Usuario no encontrado'); return }
         setProfile(prof)
@@ -120,24 +130,30 @@ export default function UserProfile() {
         setCompletions(comps)
 
         const nowTs = Date.now()
-        const pending = assignments.filter(a => a.status === 'pending' && new Date(a.due_date || 0).getTime() > nowTs)
-        const overdue = assignments.filter(a => a.status !== 'completed' && a.due_date && new Date(a.due_date).getTime() < nowTs)
+        const pending = assignments.filter(a =>
+          a.status === 'pending' && new Date(a.due_date || 0).getTime() > nowTs
+        )
+        const overdue = assignments.filter(a =>
+          a.status === 'overdue' ||
+          (a.status === 'pending' && a.due_date && new Date(a.due_date).getTime() < nowTs)
+        )
 
         setPendingItems(pending)
         setOverdueItems(overdue)
 
-        const completadas = comps.length
+        // Stats: completadas de este mes
+        const monthComps  = comps.filter(c => c.completed_at && new Date(c.completed_at).getTime() >= startOfMonth.getTime())
+        const completadas = monthComps.length
         const vencidasN   = overdue.length
-        if (assignRes.error) console.warn('[UserProfile] assignments RLS bloqueado:', assignRes.error.message)
-        if (compRes.error)   console.warn('[UserProfile] completions RLS bloqueado:', compRes.error.message)
+
         setStats({
           total:         assignments.length,
           completadas,
           pendientes:    pending.length,
           vencidas:      vencidasN,
-          fueraDeTiempo: comps.filter(c => c.is_on_time === false).length,
-          voboAprobado:  comps.filter(c => c.vobo_status === 'approved').length,
-          voboPendiente: comps.filter(c => c.vobo_status === 'pending').length,
+          fueraDeTiempo: monthComps.filter(c => c.is_on_time === false).length,
+          voboAprobado:  monthComps.filter(c => c.vobo_status === 'approved').length,
+          voboPendiente: monthComps.filter(c => c.vobo_status === 'pending').length,
           cumplimiento:  (completadas + vencidasN) > 0
             ? Math.min(100, Math.round((completadas / (completadas + vencidasN)) * 100))
             : 0,
@@ -233,6 +249,25 @@ export default function UserProfile() {
           Editar
         </button>
       </div>
+
+      {/* ── RLS error banner ── */}
+      {rlsError && (
+        <div className="mt-4 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3.5 flex items-start gap-3">
+          <svg className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div>
+            <p className="text-xs font-bold text-amber-700">Sin permiso para ver datos de este TSD</p>
+            <p className="text-[11px] text-amber-600 mt-0.5 leading-snug">{rlsError}</p>
+            <p className="text-[11px] text-amber-600 mt-1 leading-snug">
+              Ejecuta en Supabase → SQL Editor:
+              <code className="block mt-1 bg-amber-100 rounded px-2 py-1 font-mono text-[10px] whitespace-pre-wrap">
+                {`create policy "Executives read all assignments"\non task_assignments for select\nusing ((auth.jwt() -> 'app_metadata' ->> 'role') = 'executive');\n\ncreate policy "Executives read all completions"\non task_completions for select\nusing ((auth.jwt() -> 'app_metadata' ->> 'role') = 'executive');`}
+              </code>
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Estadísticas globales ── */}
       <SectionTitle>Estadísticas globales</SectionTitle>

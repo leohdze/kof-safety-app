@@ -40,6 +40,7 @@ import {
   useField, getStatus, getUrgencyLevel, URGENCY_STYLE, formatDeadline,
 } from '../../context/FieldContext'
 import { submitCompletion } from '../../services/completionService'
+import { setCommitmentDate } from '../../services/assignmentService'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -177,11 +178,16 @@ export default function TaskDetail() {
   const [uploadsMap,   setUploadsMap]   = useState({})
   const [comentario,   setComentario]   = useState('')
   const [completing,   setCompleting]   = useState(false)
-  const [done,         setDone]         = useState(false)
-  const [showSuccess,  setShowSuccess]  = useState(false)
-  const [dbEvidencias, setDbEvidencias] = useState(null)  // null=not loaded, []+=loaded
-  const [loadingEvid,  setLoadingEvid]  = useState(false)
-  const [completionId, setCompletionId] = useState(null)
+  const [done,                setDone]                = useState(false)
+  const [showSuccess,         setShowSuccess]         = useState(false)
+  const [dbEvidencias,        setDbEvidencias]        = useState(null)
+  const [loadingEvid,         setLoadingEvid]         = useState(false)
+  const [completionId,        setCompletionId]        = useState(null)
+  const [localCommitmentDate, setLocalCommitmentDate] = useState(task?.commitmentDate ?? null)
+  const [selectedDate,        setSelectedDate]        = useState('')
+  const [savingDate,          setSavingDate]          = useState(false)
+  const [teammates,           setTeammates]           = useState([])
+  const [editingDate,         setEditingDate]         = useState(false)
 
   const cameraRef  = useRef(null)
   const galleryRef = useRef(null)
@@ -224,6 +230,40 @@ export default function TaskDetail() {
         setLoadingEvid(false)
       })
   }, [completionId])
+
+  // Sync localCommitmentDate when task changes (after FieldContext refresh)
+  useEffect(() => {
+    if (task?.commitmentDate) setLocalCommitmentDate(task.commitmentDate)
+  }, [task?.commitmentDate])
+
+  // Load teammates for this task
+  useEffect(() => {
+    if (!task?.taskId || !user?.id) return
+    supabase
+      .from('task_assignments')
+      .select('id, status, due_date, user_id')
+      .eq('task_id', task.taskId)
+      .neq('user_id', user.id)
+      .then(async ({ data: assignData, error }) => {
+        if (error || !assignData?.length) return
+        const userIds = [...new Set(assignData.map(a => a.user_id))]
+        const { data: profiles } = await supabase
+          .from('user_profiles')
+          .select('id, full_name, uo')
+          .in('id', userIds)
+        const pm = Object.fromEntries((profiles ?? []).map(p => [p.id, p]))
+        const nowTs = Date.now()
+        setTeammates(assignData.map(a => ({
+          userId: a.user_id,
+          nombre: pm[a.user_id]?.full_name ?? 'TSD',
+          uo:     Array.isArray(pm[a.user_id]?.uo) ? (pm[a.user_id].uo[0] ?? '') : (pm[a.user_id]?.uo ?? ''),
+          status: a.status === 'overdue' || (a.status === 'pending' && a.due_date && new Date(a.due_date).getTime() < nowTs)
+                    ? 'overdue'
+                    : a.status === 'completed' ? 'completed' : 'pending',
+        })))
+      })
+      .catch(console.warn)
+  }, [task?.taskId, user?.id])
 
   // ── Upload helpers ──────────────────────────────────────────────────────────
 
@@ -326,6 +366,21 @@ export default function TaskDetail() {
     })
   }
 
+  async function handleSaveDate() {
+    if (!selectedDate || !task?.assignmentId) return
+    setSavingDate(true)
+    try {
+      await setCommitmentDate(task.assignmentId, selectedDate)
+      setLocalCommitmentDate(selectedDate)
+      setEditingDate(false)
+      setSelectedDate('')
+    } catch (err) {
+      console.warn('[TaskDetail] setCommitmentDate error:', err.message)
+    } finally {
+      setSavingDate(false)
+    }
+  }
+
   async function handleComplete() {
     if (completing || done) return
     setCompleting(true)
@@ -387,10 +442,11 @@ export default function TaskDetail() {
 
   // ── Derived state ─────────────────────────────────────────────────────────────
 
-  const uploadsArr   = Object.values(uploadsMap)
-  const hasUploading = uploadsArr.some(u => u.status === 'uploading')
-  const doneImages   = uploadsArr.filter(u => u.status === 'done' && u.isImage)
-  const otherItems   = uploadsArr.filter(u => !(u.status === 'done' && u.isImage))
+  const uploadsArr          = Object.values(uploadsMap)
+  const hasUploading        = uploadsArr.some(u => u.status === 'uploading')
+  const doneImages          = uploadsArr.filter(u => u.status === 'done' && u.isImage)
+  const otherItems          = uploadsArr.filter(u => !(u.status === 'done' && u.isImage))
+  const needsCommitmentDate = task.dateType === 'tsd_defined' && !localCommitmentDate
 
   // Normalize evidence from DB shape { file_url, file_name, file_type } or
   // in-memory shape { preview, nombre, tipo } to a unified display shape.
@@ -495,6 +551,66 @@ export default function TaskDetail() {
             )}
           </div>
 
+          {/* ── Fecha compromiso (tareas tipo B) ─────────────────────────── */}
+          {task.dateType === 'tsd_defined' && (
+            <div className={`rounded-2xl border p-4 ${localCommitmentDate && !editingDate ? 'bg-emerald-50 border-emerald-100' : 'bg-amber-50 border-amber-200'}`}>
+              {localCommitmentDate && !editingDate ? (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-emerald-700">Tu fecha compromiso</p>
+                    <p className="text-sm font-semibold text-emerald-800">
+                      {new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(localCommitmentDate))}
+                    </p>
+                  </div>
+                  {!isCompleted && (
+                    <button
+                      onClick={() => { setEditingDate(true); setSelectedDate(localCommitmentDate.slice(0, 10)) }}
+                      className="text-xs font-semibold text-emerald-600 hover:text-emerald-800 border border-emerald-200 rounded-lg px-2.5 py-1 transition-colors">
+                      Cambiar
+                    </button>
+                  )}
+                </div>
+              ) : !isCompleted ? (
+                <>
+                  <div className="flex items-start gap-2 mb-3">
+                    <svg className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <p className="text-xs text-amber-700 leading-snug">
+                      Esta tarea requiere que ingreses tu fecha compromiso <span className="font-semibold">(plazo: 7 días)</span>
+                    </p>
+                  </div>
+                  <input
+                    type="date"
+                    className="w-full bg-white border border-amber-200 rounded-xl px-3 py-2 text-sm text-gray-700 mb-3 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    value={selectedDate}
+                    min={new Date().toISOString().split('T')[0]}
+                    onChange={e => setSelectedDate(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    {editingDate && (
+                      <button onClick={() => { setEditingDate(false); setSelectedDate('') }}
+                        className="flex-1 py-2.5 rounded-xl border border-amber-200 text-xs font-bold text-amber-600 hover:bg-amber-100 transition-colors">
+                        Cancelar
+                      </button>
+                    )}
+                    <button
+                      onClick={handleSaveDate}
+                      disabled={!selectedDate || savingDate}
+                      className="flex-1 bg-amber-500 text-white text-sm font-bold py-2.5 rounded-xl hover:bg-amber-600 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                      {savingDate ? 'Guardando…' : 'Guardar fecha compromiso'}
+                    </button>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          )}
+
           {/* ── Material de apoyo ─────────────────────────────────────────── */}
           {task.materialApoyo?.length > 0 && (
             <div>
@@ -505,6 +621,38 @@ export default function TaskDetail() {
                 {task.materialApoyo.map((doc, i) => (
                   <DocChip key={i} nombre={doc.nombre} tipo={doc.tipo} url={doc.url} />
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Compañeros en esta tarea ─────────────────────────────────── */}
+          {teammates.length > 0 && (
+            <div>
+              <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2.5 px-1">
+                Mis compañeros en esta tarea
+              </h2>
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                {teammates.map((tm, i) => {
+                  const ini = tm.nombre.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
+                  const badgeStyle = tm.status === 'completed'
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : tm.status === 'overdue'
+                    ? 'bg-red-100 text-kof-red'
+                    : 'bg-gray-100 text-gray-500'
+                  const badgeLabel = tm.status === 'completed' ? 'Entregó' : tm.status === 'overdue' ? 'Vencida' : 'Pendiente'
+                  return (
+                    <div key={tm.userId} className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? 'border-t border-gray-50' : ''}`}>
+                      <div className="w-8 h-8 rounded-full bg-kof-red/10 flex items-center justify-center flex-shrink-0">
+                        <span className="text-[11px] font-bold text-kof-red">{ini}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-800 truncate">{tm.nombre}</p>
+                        {tm.uo && <p className="text-[10px] text-gray-400">{tm.uo}</p>}
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeStyle}`}>{badgeLabel}</span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -710,8 +858,13 @@ export default function TaskDetail() {
                   Esperando que terminen las subidas…
                 </p>
               )}
+              {needsCommitmentDate && (
+                <p className="text-center text-xs text-amber-600 mb-2">
+                  Ingresa tu fecha compromiso para poder completar esta tarea
+                </p>
+              )}
               <button onClick={handleComplete}
-                disabled={completing || done || hasUploading}
+                disabled={completing || done || hasUploading || needsCommitmentDate}
                 className="w-full bg-kof-red text-white font-bold py-4 rounded-2xl shadow-md shadow-kof-red/25 hover:bg-kof-red-dark active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                 {completing ? (
                   <>

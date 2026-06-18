@@ -52,8 +52,10 @@ function normalizeAssignment(row) {
           size:    e.file_size,
         }))
       : [],
-    comentario: latest?.comments ?? '',
-    voboStatus: latest?.vobo_status ?? null,
+    comentario:      latest?.comments ?? '',
+    voboStatus:      latest?.vobo_status ?? null,
+    dateType:        task.date_type ?? 'fixed',
+    commitmentDate:  row.commitment_date ?? null,
   }
 }
 
@@ -66,7 +68,7 @@ export async function getMyAssignments(userId) {
       id, user_id, uo, region, due_date, status, commitment_date,
       tasks (
         id, title, description, periodicity, requires_vobo,
-        evidence_types, due_date, material_url
+        evidence_types, due_date, material_url, date_type
       ),
       task_completions (
         id, completed_at, is_on_time, comments, attempt_number,

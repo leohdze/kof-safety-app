@@ -1,10 +1,13 @@
 import { supabase } from './supabase'
 
-export async function logout() {
+export const logout = async () => {
   try {
-    await supabase.auth.signOut()
-  } catch {
-    // ignorar errores de red — el signOut local ya ocurrió
+    await Promise.race([
+      supabase.auth.signOut(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
+    ])
+  } catch (e) {
+    console.warn('signOut error (ignorado):', e.message)
   } finally {
     localStorage.clear()
     sessionStorage.clear()
