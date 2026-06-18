@@ -29,11 +29,11 @@ function normalizeAssignment(row) {
         const parsed = JSON.parse(u)
         if (Array.isArray(parsed)) return parsed.map((url, i) => {
           const ext = url.split('.').pop().toLowerCase().split('?')[0]
-          const tipo = ['jpg','jpeg','png','heic','webp'].includes(ext) ? 'image'
-            : ext === 'pdf' ? 'pdf'
-            : ['xls','xlsx'].includes(ext) ? 'excel'
-            : ['doc','docx'].includes(ext) ? 'word'
-            : ['mp4','mov','avi'].includes(ext) ? 'video' : 'pdf'
+          const tipo = ['jpg','jpeg','png','heic','webp'].includes(ext) ? 'IMG'
+            : ext === 'pdf' ? 'PDF'
+            : ['xls','xlsx'].includes(ext) ? 'Excel'
+            : ['doc','docx'].includes(ext) ? 'Word'
+            : ['mp4','mov','avi'].includes(ext) ? 'Video' : 'PDF'
           return { nombre: `Material ${i + 1}`, tipo, url }
         })
       } catch {}
