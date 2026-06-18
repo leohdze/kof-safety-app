@@ -12,7 +12,53 @@ const SUBROLES_EXECUTIVE = ['Regional', 'Corporativo']
 
 const BLANK_FORM = {
   nombre: '', correo: '', password: '', rol: 'field',
-  subrole: 'TSD', region: 'Coecillo', uo: '', activo: true,
+  subrole: 'TSD', region: 'Coecillo', uo: [], activo: true,
+}
+
+function UOChips({ value = [], onChange }) {
+  const [input, setInput] = useState('')
+
+  function add() {
+    const v = input.trim()
+    if (!v || value.includes(v)) { setInput(''); return }
+    onChange([...value, v])
+    setInput('')
+  }
+
+  return (
+    <div className="space-y-2">
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {value.map((uo, i) => (
+            <span key={i} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold px-2.5 py-1 rounded-full">
+              {uo}
+              <button type="button" onClick={() => onChange(value.filter((_, j) => j !== i))}
+                className="text-blue-400 hover:text-blue-700 transition-colors">
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <input
+          className="input-field flex-1 text-sm py-1.5"
+          placeholder="Ej: KM17"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add() }
+          }}
+        />
+        <button type="button" onClick={add}
+          className="px-3 py-1.5 bg-kof-red text-white text-sm font-bold rounded-xl hover:bg-kof-red-dark transition-colors flex-shrink-0">
+          +
+        </button>
+      </div>
+    </div>
+  )
 }
 
 function Badge({ children, variant }) {
@@ -87,8 +133,7 @@ function UserForm({ form, setForm, isEdit, onSubmit, onCancel }) {
           </select>
         )}
         {field('Unidad(es) Operativa(s)',
-          <input className="input-field" placeholder="Ej: KM17, Cuauhtémoc" value={form.uo}
-            onChange={e => setForm(f => ({ ...f, uo: e.target.value }))} />
+          <UOChips value={form.uo ?? []} onChange={uos => setForm(f => ({ ...f, uo: uos }))} />
         )}
       </div>
 
@@ -154,7 +199,10 @@ export default function Users() {
 
   function openEdit(user) {
     setEditUser(user)
-    setForm({ ...user, password: '' })
+    const uoArr = Array.isArray(user.uo)
+      ? user.uo
+      : (user.uo ? user.uo.split(',').map(s => s.trim()).filter(Boolean) : [])
+    setForm({ ...user, password: '', uo: uoArr })
     setModal('edit')
   }
 

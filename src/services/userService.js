@@ -75,7 +75,7 @@ export async function createUserProfile(formData) {
       role:      formData.rol,
       subrole:   formData.subrole,
       region:    formData.region,
-      uo:        formData.uo ? formData.uo.split(',').map(s => s.trim()) : [],
+      uo:        Array.isArray(formData.uo) ? formData.uo : (formData.uo ? formData.uo.split(',').map(s => s.trim()).filter(Boolean) : []),
       is_active: true,
     })
     .select()
@@ -113,7 +113,7 @@ export async function updateUserProfile(id, formData) {
       role:      formData.rol,
       subrole:   formData.subrole,
       region:    formData.region,
-      uo:        formData.uo ? formData.uo.split(',').map(s => s.trim()) : [],
+      uo:        Array.isArray(formData.uo) ? formData.uo : (formData.uo ? formData.uo.split(',').map(s => s.trim()).filter(Boolean) : []),
       is_active: formData.activo,
     })
     .eq('id', id)

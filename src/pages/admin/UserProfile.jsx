@@ -120,17 +120,21 @@ export default function UserProfile() {
         setPendingItems(pending)
         setOverdueItems(overdue)
 
-        const total = assignments.length
         const completadas = comps.length
+        const vencidasN   = overdue.length
+        if (assignRes.error) console.warn('[UserProfile] assignments RLS/error:', assignRes.error.message)
+        if (compRes.error)   console.warn('[UserProfile] completions RLS/error:', compRes.error.message)
         setStats({
-          total,
+          total:         assignments.length,
           completadas,
           pendientes:    pending.length,
-          vencidas:      overdue.length,
+          vencidas:      vencidasN,
           fueraDeTiempo: comps.filter(c => c.is_on_time === false).length,
           voboAprobado:  comps.filter(c => c.vobo_status === 'approved').length,
           voboPendiente: comps.filter(c => c.vobo_status === 'pending').length,
-          cumplimiento:  total > 0 ? Math.round((completadas / total) * 100) : 0,
+          cumplimiento:  (completadas + vencidasN) > 0
+            ? Math.min(100, Math.round((completadas / (completadas + vencidasN)) * 100))
+            : 0,
         })
       })
       .catch(err => setError(err.message))

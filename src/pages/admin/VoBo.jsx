@@ -55,19 +55,21 @@ const REGIONES = [
 function EvidPill({ tipo, nombre, url }) {
   if (tipo === 'image' && url) {
     return (
-      <a href={url} target="_blank" rel="noreferrer"
-        className="w-12 h-12 rounded-xl overflow-hidden border border-gray-100 bg-gray-50 flex-shrink-0 block">
+      <a href={url} target="_blank" rel="noopener noreferrer"
+        className="w-12 h-12 rounded-xl overflow-hidden border border-gray-100 bg-gray-50 flex-shrink-0 block cursor-pointer">
         <img src={url} alt={nombre} className="w-full h-full object-cover" />
       </a>
     )
   }
   const s = EV_ICON_STYLE[tipo] ?? { bg: 'bg-gray-100 text-gray-500', label: 'FILE' }
-  return (
+  const chip = (
     <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1">
       <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${s.bg}`}>{s.label}</span>
       <span className="text-[10px] text-gray-600 truncate max-w-[120px]">{nombre}</span>
     </div>
   )
+  if (url) return <a href={url} target="_blank" rel="noopener noreferrer" download className="cursor-pointer hover:opacity-70 transition-opacity">{chip}</a>
+  return chip
 }
 
 // ─── Modal de rechazo ─────────────────────────────────────────────────────────

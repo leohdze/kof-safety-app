@@ -64,33 +64,38 @@ function EvidenciaGallery({ evidencias }) {
       {/* Grid imágenes */}
       {currentItems.some(e => e.tipo === 'image') && (
         <div className="grid grid-cols-3 gap-2 mb-3">
-          {currentItems.filter(e => e.tipo === 'image').map((ev, i) => (
-            <div key={i} className="aspect-square bg-gray-100 rounded-xl overflow-hidden relative group">
-              {ev.url ? (
-                <img src={ev.url} alt={ev.nombre} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-blue-50">
-                  <svg className="w-7 h-7 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
+          {currentItems.filter(e => e.tipo === 'image').map((ev, i) => {
+            const tile = (
+              <div className="aspect-square bg-gray-100 rounded-xl overflow-hidden relative group cursor-pointer">
+                {ev.url ? (
+                  <img src={ev.url} alt={ev.nombre} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-blue-50">
+                    <svg className="w-7 h-7 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all rounded-xl" />
+                <div className="absolute bottom-1 left-1 right-1">
+                  <p className="text-[9px] text-white font-semibold truncate bg-black/40 rounded px-1 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {ev.nombre}
+                  </p>
                 </div>
-              )}
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all rounded-xl" />
-              <div className="absolute bottom-1 left-1 right-1">
-                <p className="text-[9px] text-white font-semibold truncate bg-black/40 rounded px-1 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {ev.nombre}
-                </p>
               </div>
-            </div>
-          ))}
+            )
+            return ev.url
+              ? <a key={i} href={ev.url} target="_blank" rel="noopener noreferrer">{tile}</a>
+              : <div key={i}>{tile}</div>
+          })}
         </div>
       )}
 
       {/* Lista documentos / videos */}
       {currentItems.filter(e => e.tipo !== 'image').map((ev, i) => {
         const cfg = typeCfg(ev.tipo)
-        return (
-          <div key={i} className={`flex items-center gap-3 p-3 rounded-xl border mb-2 ${cfg.border} ${cfg.bg}`}>
+        const inner = (
+          <>
             <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-white shadow-sm`}>
               {ev.tipo === 'video' ? (
                 <svg className={`w-5 h-5 ${cfg.text}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -106,14 +111,19 @@ function EvidenciaGallery({ evidencias }) {
               <p className="text-xs font-semibold text-gray-800 truncate">{ev.nombre}</p>
               <span className={`text-[9px] font-extrabold ${cfg.text}`}>{cfg.label}</span>
             </div>
-            {ev.url && (
-              <a href={ev.url} download target="_blank" rel="noopener noreferrer"
-                className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors p-1">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-              </a>
-            )}
+            <svg className={`w-4 h-4 flex-shrink-0 ${ev.url ? cfg.text : 'text-gray-200'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+          </>
+        )
+        return ev.url ? (
+          <a key={i} href={ev.url} target="_blank" rel="noopener noreferrer" download
+            className={`flex items-center gap-3 p-3 rounded-xl border mb-2 cursor-pointer hover:opacity-80 transition-opacity ${cfg.border} ${cfg.bg}`}>
+            {inner}
+          </a>
+        ) : (
+          <div key={i} className={`flex items-center gap-3 p-3 rounded-xl border mb-2 ${cfg.border} ${cfg.bg}`}>
+            {inner}
           </div>
         )
       })}
